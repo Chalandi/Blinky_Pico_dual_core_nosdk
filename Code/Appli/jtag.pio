@@ -1,6 +1,4 @@
 /*
-  The TAP defines the interface between the DTAB and the debug tool. The JTAG Port is the physical
-  connector on the PCB where the debug cable is plugged.
   The IEEE standard defines the following TAP signals, used for the serial communication and driving the TAP
   controller (JTAG state machine):
   
@@ -15,10 +13,7 @@
    ---------------------------------------------------------------------------------------------------
   The TMS and TDI line are sampled by the DTAP on each rising edge on the TCK line. The TDO line
   changes its value after a falling edge on the TCK line.
-  
-  
-  
-  
+
    --------------------------------------------------------------------------------------------------------------------
   |                                             JTAG OPERATION                                                         |
   |--------------------------------------------------------------------------------------------------------------------|
@@ -73,37 +68,95 @@
 .define SIDE_SET_TCK_HIGH  0x02
 .define SIDE_SET_TCK_LOW   0x00
 
-
+/*************************************************************************************/
+/* This program is executed by the PIO state machine to initialize the pin direction */
+/*************************************************************************************/
 .program PIO_JTAG_SET_PIN_CONFIG
 .wrap_target
-    set pindirs, 0x0F ; Set (TRST, TMS, TCK and TDI) as output and (TDO) as input
+    set pindirs, 0x0F /* Set (TRST, TMS, TCK and TDI) as output and (TDO) as input */
 .wrap
 
-
+/*************************************************************************************/
+/* This program is executed by the PIO state machine to set the output pin level */
+/*************************************************************************************/
 .program PIO_JTAG_SET_PIN_OUTPUT
 .wrap_target
-    set pins, 0x0F ; Set (TRST, TMS, TCK and TDI) as logic 1
+    set pins, 0x0F /* Set (TRST, TMS, TCK and TDI) as logic 1 */
 .wrap
 
 
+/*************************************************************************************/
+/* This program is executed by the PIO state machine to reset the JTAG TAP */
+/*************************************************************************************/
+.program PIO_JTAG_RESET_AND_IDLE
+.side_set 2 opt
+.wrap_target
+    set x, 4 side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH)
+PIO_JTAG_RESET_LOOP:
+    set pins, SET_TRST_HIGH side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_HIGH) [1]
+    set pins, SET_TRST_HIGH side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH)
+    jmp x--  PIO_JTAG_RESET_LOOP
+    set pins, SET_TRST_HIGH side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_LOW) [1]
+    set pins, SET_TRST_HIGH side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_LOW) [1]
+.wrap
+
+/*************************************************************************************/
+/* This program is executed by the PIO state machine to transfer JTAG command */
+/*************************************************************************************/
 .program PIO_JTAG
 
-.side_set 2
+.side_set 2 opt
 
 .wrap_target
-    ;set pins, SET_TRST_HIGH side (SIDE_SET_TMS_HIGH | SIDE_SET_TCK_HIGH)
-    ;set pins, SET_TRST_LOW  side (SIDE_SET_TMS_LOW | SIDE_SET_TCK_LOW)
 
+    set y, 1 /* loop twice : post-decrement counter so we loop twice with y=1  */
 
+PIO_JTAG_DRIVE_TDI_LOOP_TWICE:
+
+    /* read the 2 FIFO's entries (size, data) */
+    pull block
+    mov x, osr
+    jmp !x PIO_JTAG_INIT
+    pull block
+
+    /* transition to Shift-IR / Shift-DR */
+    set pins, (SET_TDI_LOW | SET_TRST_HIGH) side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_HIGH) [1]
+    set pins, (SET_TDI_LOW | SET_TRST_HIGH) side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH) [1]
+    set pins, (SET_TDI_LOW | SET_TRST_HIGH) side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_HIGH) [1]
+    set pins, (SET_TDI_LOW | SET_TRST_HIGH) side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH) [1]
+    set pins, (SET_TDI_LOW | SET_TRST_HIGH) side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_LOW)  [1]
+    set pins, (SET_TDI_LOW | SET_TRST_HIGH) side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_LOW)  [1]
+    set pins, (SET_TDI_LOW | SET_TRST_HIGH) side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_LOW)  [1]
+    set pins, (SET_TDI_LOW | SET_TRST_HIGH) side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_LOW)  [1]
+
+PIO_JTAG_DRIVE_TDI_LOOP:
+    out pins, 1 side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_LOW)  [2]
+    nop         side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_LOW)
+    in  pins, 1
+    jmp x--  PIO_JTAG_DRIVE_TDI_LOOP
+    out pins, 1 side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_HIGH) [2]
+    nop         side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH) [1]
+    in  pins, 1
+    push block
+    jmp y-- PIO_JTAG_DRIVE_TDI_LOOP_TWICE
+
+    /* set interrupt */
+    ;irq set 0
+
+    /* transition to Run-Test/Idle JTAG state */
+    set pins, (SET_TDI_LOW | SET_TRST_HIGH) side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_HIGH) [1]
+    jmp PIO_JTAG_IDLE_STATE                 side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH) [1]
+    //set pins, (SET_TDI_LOW | SET_TRST_HIGH) side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_LOW)  [1]
+    //jmp 0                                   side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_LOW)  [1]
+
+PIO_JTAG_INIT:
     set x, 4 side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH)
-PUBLIC PIO_JTAG_RESET:
+PIO_JTAG_RESET_LOOP:
     set pins, SET_TRST_HIGH side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_HIGH) [1]
-    set pins, SET_TRST_HIGH side (SIDE_SET_TCK_HIGH  | SIDE_SET_TMS_HIGH)
-    jmp x--  PIO_JTAG_RESET side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH)
-    nop side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH) [7]
-    nop side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH) [7]
-    nop side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH) [7]
-    nop side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH) [7]
-    nop side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH) [7]
+    nop                     side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH)
+    jmp x--  PIO_JTAG_RESET_LOOP
+PIO_JTAG_IDLE_STATE:
+    nop                     side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_LOW) [1]
+    jmp 0                   side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_LOW) [1]
 
 .wrap

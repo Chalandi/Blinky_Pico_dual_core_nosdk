@@ -159,29 +159,64 @@ void main_Core1(void)
   PIO0->SM0_PINCTRL.bit.SET_COUNT = 4;
   PIO0->SM0_INSTR.reg = (uint32_t)PIO_JTAG_SET_PIN_OUTPUT_program_instructions[0];
 
+  /* enable side-set opt */
+  PIO0->SM0_EXECCTRL.bit.SIDE_EN = 1;
+
   /* configure wrap */
   PIO0->SM0_EXECCTRL.bit.WRAP_TOP    = PIO_JTAG_wrap;
   PIO0->SM0_EXECCTRL.bit.WRAP_BOTTOM = PIO_JTAG_wrap_target;
 
   /* configure pins */
   PIO0->SM0_PINCTRL.bit.SIDESET_BASE  = 1;
-  PIO0->SM0_PINCTRL.bit.SIDESET_COUNT = 2;
+  PIO0->SM0_PINCTRL.bit.SIDESET_COUNT = 3; // Physical side-set pins (+ 1 if side-set opt is used)
   
   PIO0->SM0_PINCTRL.bit.OUT_BASE      = 3;
   PIO0->SM0_PINCTRL.bit.OUT_COUNT     = 1;
 
   PIO0->SM0_PINCTRL.bit.SET_BASE      = 0;
-  PIO0->SM0_PINCTRL.bit.SET_COUNT     = 1;
+  PIO0->SM0_PINCTRL.bit.SET_COUNT     = 4;
 
   PIO0->SM0_PINCTRL.bit.IN_BASE       = 4;
+
+  /* configure the shift reg */
+  PIO0->SM0_SHIFTCTRL.reg = 0;
+  PIO0->SM0_SHIFTCTRL.bit.IN_SHIFTDIR  = 1;
+  PIO0->SM0_SHIFTCTRL.bit.OUT_SHIFTDIR = 1;
 
   /* enable the SM0 */
   PIO0->CTRL.bit.SM_ENABLE = 1;
 
+  /* fill the TX fifo */
+  PIO0->TXF0 = 0; /* init */
+  PIO0->TXF0 = 2; /* 4 - 2 */
+  PIO0->TXF0 = 15;
+  PIO0->TXF0 = 30; /* 32 - 2 */
+  PIO0->TXF0 = 0xb15b00b5;
+
+  for(uint32 i=0;i<4;i++)
+  {
+    volatile uint32 x = PIO0->RXF0;
+    x = x;
+  }
+
+
+
   while(1)
   {
     LED_GREEN_TOGGLE();
-    BlockingDelay(8000000);
+    BlockingDelay(10000000);
+    
+    PIO0->TXF0 = 2; /* 4 - 2 */
+    PIO0->TXF0 = 5;
+    PIO0->TXF0 = 30; /* 32 - 2 */
+    PIO0->TXF0 = 0xdeadbeef;
+  
+  for(uint32 i=0;i<4;i++)
+  {
+    volatile uint32 x = PIO0->RXF0;
+    x = x;
+  }  
   }
+
 
 }

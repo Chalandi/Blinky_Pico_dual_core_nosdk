@@ -1,0 +1,109 @@
+/*
+  The TAP defines the interface between the DTAB and the debug tool. The JTAG Port is the physical
+  connector on the PCB where the debug cable is plugged.
+  The IEEE standard defines the following TAP signals, used for the serial communication and driving the TAP
+  controller (JTAG state machine):
+  
+   ---------------------------------------------------------------------------------------------------
+  | Signal  | Name        | Description                                          | Pico pin direction |
+  |---------|-------------|------------------------------------------------------|--------------------|
+  | TDI     | Test Data   | In serial data from debugger to target               | Out                |
+  | TDO     | Test Data   | Out serial data from target to debugger              | In                 |
+  | TCK     | Test Clock  | Clock signal from debugger to target                 | Out                |
+  | TMS     | Test Mode   | Select controls the TAP controller state transitions | Out                |
+  | TRST    | Test Reset  | optional, resets the TAP controller                  | Out                |
+   ---------------------------------------------------------------------------------------------------
+  The TMS and TDI line are sampled by the DTAP on each rising edge on the TCK line. The TDO line
+  changes its value after a falling edge on the TCK line.
+  
+  
+  
+  
+   --------------------------------------------------------------------------------------------------------------------
+  |                                             JTAG OPERATION                                                         |
+  |--------------------------------------------------------------------------------------------------------------------|
+  | Current TAP State                  JTAG Operation                 Description                                      |
+  |--------------------------------------------------------------------------------------------------------------------|
+  | Run-Test/Idle                                                     Pause Parking Position                           |
+  |                                    TMS = 1100                     move to Shift-IR state                           |
+  |                                    TDI = 0000                     ignored by TAP                                   |
+  |                                    TOO = xxxx                     x = don't care                                   |
+  | Shift-IR                                                                                                           |
+  |                                    TMS = 00000001                 leave Shift-IR (TMS = 1) on last bit             |
+  |                                    TDI = aaaaaaaa                 new value to IR                                  |
+  |                                    TOO = bbbbbbbb                 current value from IR                            |
+  | Exit1-IR                                                                                                           |
+  |                                    TMS = 1100                     move to Shift-DR state                           |
+  |                                    TDI = 0000                     ignored by TAP                                   |
+  |                                    TOO = xxxx                     x = don't care                                   |
+  | Shift-DR                                                                                                           |
+  |                                    TMS = 00000001                 leave Shift-DR (TMS = 1) on last bit             |
+  |                                    TDI = aaaaaaaa                 new value to DR                                  |
+  |                                    TOO = bbbbbbbb                 current value from DR                            |
+  | Exit1-DR                                                                                                           |
+  |                                    TMS = 10                       Return to Pause Parking Position                 |
+  |                                    TDI = 00                                                                        |
+  |                                    TDO = xx                                                                        |
+  | Run-Test/Idle                                                     Pause Parking Position                           |
+  |                                                                   Ready for next operation                         |
+   --------------------------------------------------------------------------------------------------------------------
+*/
+
+.define PIN_TRST   0   // GPIO_0: set
+.define PIN_TMS    1   // GPIO_1: side-set
+.define PIN_TCK    2   // GPIO_2: side-set
+.define PIN_TDI    3   // GPIO_3: out
+.define PIN_TDO    4   // GPIO_4: in
+
+.define SET_TRST_HIGH      0x01
+.define SET_TRST_LOW       0x00
+
+.define SET_TMS_HIGH       0x02
+.define SET_TMS_LOW        0x00
+
+.define SET_TCK_HIGH       0x04
+.define SET_TCK_LOW        0x00
+
+.define SET_TDI_HIGH       0x08
+.define SET_TDI_LOW        0x00
+
+.define SIDE_SET_TMS_HIGH  0x01
+.define SIDE_SET_TMS_LOW   0x00
+
+.define SIDE_SET_TCK_HIGH  0x02
+.define SIDE_SET_TCK_LOW   0x00
+
+
+.program PIO_JTAG_SET_PIN_CONFIG
+.wrap_target
+    set pindirs, 0x0F ; Set (TRST, TMS, TCK and TDI) as output and (TDO) as input
+.wrap
+
+
+.program PIO_JTAG_SET_PIN_OUTPUT
+.wrap_target
+    set pins, 0x0F ; Set (TRST, TMS, TCK and TDI) as logic 1
+.wrap
+
+
+.program PIO_JTAG
+
+.side_set 2
+
+.wrap_target
+    ;set pins, SET_TRST_HIGH side (SIDE_SET_TMS_HIGH | SIDE_SET_TCK_HIGH)
+    ;set pins, SET_TRST_LOW  side (SIDE_SET_TMS_LOW | SIDE_SET_TCK_LOW)
+
+
+    set x, 4 side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH)
+PUBLIC PIO_JTAG_RESET:
+    set pins, SET_TRST_HIGH side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_HIGH) [1]
+    set pins, SET_TRST_HIGH side (SIDE_SET_TCK_HIGH  | SIDE_SET_TMS_HIGH)
+    jmp x--  PIO_JTAG_RESET side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH)
+    nop side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH) [7]
+    nop side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH) [7]
+    nop side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH) [7]
+    nop side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH) [7]
+    nop side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH) [7]
+
+.wrap

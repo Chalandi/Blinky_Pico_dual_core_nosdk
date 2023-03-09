@@ -1,0 +1,9 @@
+
+.program square
+
+    set pindirs, 3   ; Set pin to output
+
+.wrap_target
+    set pins, 1      ; Drive pin high
+    set pins, 2      ; Drive pin low
+.wrap

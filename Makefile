@@ -19,8 +19,10 @@ PRJ_NAME   = Blinky_Pico_dual_core_nosdk
 OUTPUT_DIR = Output
 OBJ_DIR    = $(OUTPUT_DIR)/Obj
 LD_SCRIPT  = $(SRC_DIR)/Memory_Map.ld
+PIO_OUT_DIR= $(SRC_DIR)/pio
 SRC_DIR    = Code
 ELF2UF2    = Tools/elf2uf2
+PIOASM     = Tools/pioasm
 
 ############################################################################################
 # Toolchain
@@ -178,11 +180,16 @@ SRC_FILES := $(SRC_DIR)/Appli/main.c                      \
              $(SRC_DIR)/Startup/Startup.c                 \
              $(SRC_DIR)/Startup/util.s
 
+
+PIO_SRC_FILES := $(SRC_DIR)/Appli/square.pio \
+                 $(SRC_DIR)/Appli/jtag.pio
+
 ############################################################################################
 # Include Paths
 ############################################################################################
 INC_FILES := $(SRC_DIR)                    \
              $(SRC_DIR)/Appli              \
+             $(SRC_DIR)/pio                \
              $(SRC_DIR)/Mcal               \
              $(SRC_DIR)/Mcal/Clock         \
              $(SRC_DIR)/Mcal/Cmsis         \
@@ -196,19 +203,26 @@ INC_FILES := $(SRC_DIR)                    \
 # Rules
 ############################################################################################
 
-VPATH := $(subst \,/,$(sort $(dir $(SRC_FILES)) $(OBJ_DIR)))
+VPATH := $(subst \,/,$(sort $(dir $(SRC_FILES)) $(OBJ_DIR) $(PIO_OUT_DIR) $(sort $(dir $(PIO_SRC_FILES)))))
 
 FILES_O := $(addprefix $(OBJ_DIR)/, $(notdir $(addsuffix .o, $(basename $(SRC_FILES)))))
 
+PIO_OUTPUT_FILES = $(addprefix $(PIO_OUT_DIR)/, $(notdir $(addsuffix .h, $(basename $(PIO_SRC_FILES)))))
 
 ifeq ($(MAKECMDGOALS),build)
 -include $(subst .o,.d,$(FILES_O))
 endif
 
-build : $(OUTPUT_DIR)/$(PRJ_NAME).elf
+build : PIO_SRC_GEN $(OUTPUT_DIR)/$(PRJ_NAME).elf
 
-all : $(OUTPUT_DIR)/$(PRJ_NAME).elf
+all : PIO_SRC_GEN $(OUTPUT_DIR)/$(PRJ_NAME).elf
 
+.PHONY : PIO_SRC_GEN
+PIO_SRC_GEN: $(PIO_OUTPUT_FILES)
+
+$(PIO_OUT_DIR)/%.h : %.pio
+	@-echo +++ compile pio assembly: $(subst \,/, $<) to $(subst \,/, $@)
+	@$(PIOASM)  $<  $@
 
 .PHONY : clean
 clean :

@@ -23,6 +23,8 @@
 #include "Gpio.h"
 #include "SysTickTimer.h"
 
+#define PICO_NO_HARDWARE 1
+#include "jtag.h"
 //=============================================================================
 // Macros
 //=============================================================================
@@ -124,9 +126,62 @@ void main_Core1(void)
   /* Synchronize with core 0 */
   RP2040_MulticoreSync(SIO->CPUID);
 
+  /* configure PIO JTAG pin */
+  IO_BANK0->GPIO0_CTRL.bit.FUNCSEL = IO_BANK0_GPIO0_CTRL_FUNCSEL_pio0_0;
+  IO_BANK0->GPIO1_CTRL.bit.FUNCSEL = IO_BANK0_GPIO1_CTRL_FUNCSEL_pio0_1;
+  IO_BANK0->GPIO2_CTRL.bit.FUNCSEL = IO_BANK0_GPIO2_CTRL_FUNCSEL_pio0_2;
+  IO_BANK0->GPIO3_CTRL.bit.FUNCSEL = IO_BANK0_GPIO3_CTRL_FUNCSEL_pio0_3;
+  IO_BANK0->GPIO4_CTRL.bit.FUNCSEL = IO_BANK0_GPIO4_CTRL_FUNCSEL_pio0_4;
+
+  /* Release PIO0 reset */
+  RESETS->RESET.bit.pio0 = 0;
+  while(RESETS->RESET_DONE.bit.pio0 == 0U);
+
+  /* copy the compiled pio assembly code into the pio memory instruction */
+  for(uint32 i=0; i < (sizeof(PIO_JTAG_program_instructions) / sizeof(uint16_t)); i++)
+  {
+    ((uint32*)&(PIO0->INSTR_MEM0.reg))[i] = (uint32)PIO_JTAG_program_instructions[i];
+  }
+
+  /* configure the SM0 cycle to 0.5 us (2MHz) */
+  PIO0->SM0_CLKDIV.bit.FRAC = 0;
+  PIO0->SM0_CLKDIV.bit.INT  = 133/2;
+
+  /* configure PIO pin direction */
+  PIO0->SM0_PINCTRL.reg = 0;
+  PIO0->SM0_PINCTRL.bit.SET_BASE  = 0;
+  PIO0->SM0_PINCTRL.bit.SET_COUNT = 5;
+  PIO0->SM0_INSTR.reg = (uint32_t)PIO_JTAG_SET_PIN_CONFIG_program_instructions[0];
+
+  /* configure PIO outputs to logic 1 */
+  PIO0->SM0_PINCTRL.reg = 0;
+  PIO0->SM0_PINCTRL.bit.SET_BASE  = 0;
+  PIO0->SM0_PINCTRL.bit.SET_COUNT = 4;
+  PIO0->SM0_INSTR.reg = (uint32_t)PIO_JTAG_SET_PIN_OUTPUT_program_instructions[0];
+
+  /* configure wrap */
+  PIO0->SM0_EXECCTRL.bit.WRAP_TOP    = PIO_JTAG_wrap;
+  PIO0->SM0_EXECCTRL.bit.WRAP_BOTTOM = PIO_JTAG_wrap_target;
+
+  /* configure pins */
+  PIO0->SM0_PINCTRL.bit.SIDESET_BASE  = 1;
+  PIO0->SM0_PINCTRL.bit.SIDESET_COUNT = 2;
+  
+  PIO0->SM0_PINCTRL.bit.OUT_BASE      = 3;
+  PIO0->SM0_PINCTRL.bit.OUT_COUNT     = 1;
+
+  PIO0->SM0_PINCTRL.bit.SET_BASE      = 0;
+  PIO0->SM0_PINCTRL.bit.SET_COUNT     = 1;
+
+  PIO0->SM0_PINCTRL.bit.IN_BASE       = 4;
+
+  /* enable the SM0 */
+  PIO0->CTRL.bit.SM_ENABLE = 1;
+
   while(1)
   {
     LED_GREEN_TOGGLE();
     BlockingDelay(8000000);
   }
+
 }

@@ -182,6 +182,8 @@ void main_Core1(void)
   PIO0->SM0_SHIFTCTRL.reg = 0;
   PIO0->SM0_SHIFTCTRL.bit.IN_SHIFTDIR  = 1;
   PIO0->SM0_SHIFTCTRL.bit.OUT_SHIFTDIR = 1;
+  PIO0->SM0_SHIFTCTRL.bit.AUTOPULL     = 1;
+  PIO0->SM0_SHIFTCTRL.bit.AUTOPUSH     = 1;
 
   /* enable the SM0 */
   PIO0->CTRL.bit.SM_ENABLE = 1;
@@ -192,6 +194,7 @@ void main_Core1(void)
   PIO0->TXF0 = 15;
   PIO0->TXF0 = 30; /* 32 - 2 */
   PIO0->TXF0 = 0xb15b00b5;
+
 
   for(uint32 i=0;i<4;i++)
   {
@@ -208,14 +211,18 @@ void main_Core1(void)
     
     PIO0->TXF0 = 2; /* 4 - 2 */
     PIO0->TXF0 = 5;
-    PIO0->TXF0 = 30; /* 32 - 2 */
-    PIO0->TXF0 = 0xdeadbeef;
+    PIO0->TXF0 = 62; /* 64 - 2 */
+    PIO0->TXF0 = 0xdeadbeef; /* LSB of 64-bit */
+    //for(uint32 i=0;i<10;i++)
+      __asm volatile("nop");
+    while(PIO0->FSTAT.bit.TXFULL);
+    PIO0->TXF0 = 0xb15b00b5; /* MSB of 64-bit */
   
   for(uint32 i=0;i<4;i++)
   {
     volatile uint32 x = PIO0->RXF0;
     x = x;
-  }  
+  }
   }
 
 

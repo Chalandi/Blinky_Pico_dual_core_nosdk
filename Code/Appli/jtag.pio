@@ -107,17 +107,21 @@ PIO_JTAG_RESET_LOOP:
 
 .side_set 2 opt
 
+.define SHIFT_OUT_ONE_BIT   1
+.define SHIFT_IN_ONE_BIT    1
+
 .wrap_target
 
-    set y, 1 /* loop twice : post-decrement counter so we loop twice with y=1  */
+    set y, 1 /* loop twice : post-decrement counter so we loop twice with y=1
+                             1st-pass : select IR and shift out IR register data
+                             2nd-pass : select DR and shift out DR register data
+             */
 
 PIO_JTAG_DRIVE_TDI_LOOP_TWICE:
 
-    /* read the 2 FIFO's entries (size, data) */
-    pull block
-    mov x, osr
-    jmp !x PIO_JTAG_INIT
-    pull block
+    /* read two FIFO's entries (size, data) in each pass */
+    out x, 32 /* get the size by AUTOPULL the FIFO (OSR is empty) or stall if FIFO is empty */
+    jmp !x PIO_JTAG_INIT /* x=0 means a request to output the JTAG init sequence */
 
     /* transition to Shift-IR / Shift-DR */
     set pins, (SET_TDI_LOW | SET_TRST_HIGH) side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_HIGH) [1]
@@ -130,14 +134,14 @@ PIO_JTAG_DRIVE_TDI_LOOP_TWICE:
     set pins, (SET_TDI_LOW | SET_TRST_HIGH) side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_LOW)  [1]
 
 PIO_JTAG_DRIVE_TDI_LOOP:
-    out pins, 1 side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_LOW)  [2]
-    nop         side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_LOW)
-    in  pins, 1
+    out pins, SHIFT_OUT_ONE_BIT side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_LOW)  [2]
+    nop                         side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_LOW)
+    in  pins, SHIFT_OUT_ONE_BIT
     jmp x--  PIO_JTAG_DRIVE_TDI_LOOP
-    out pins, 1 side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_HIGH) [2]
-    nop         side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH) [1]
-    in  pins, 1
-    push block
+    out pins, SHIFT_OUT_ONE_BIT side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_HIGH) [2]  /* output the last bit of data with TMS high */
+    nop                         side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH) [1]
+    in  pins, SHIFT_IN_ONE_BIT                                                    /* AUTOPUSH to FIFO if ISR is full (32-bit) */
+    push block                                                                    /* Manual push of the DATA higher than 32-bit */
     jmp y-- PIO_JTAG_DRIVE_TDI_LOOP_TWICE
 
     /* set interrupt */
@@ -146,17 +150,16 @@ PIO_JTAG_DRIVE_TDI_LOOP:
     /* transition to Run-Test/Idle JTAG state */
     set pins, (SET_TDI_LOW | SET_TRST_HIGH) side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_HIGH) [1]
     jmp PIO_JTAG_IDLE_STATE                 side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH) [1]
-    //set pins, (SET_TDI_LOW | SET_TRST_HIGH) side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_LOW)  [1]
-    //jmp 0                                   side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_LOW)  [1]
 
+    /* JTAG init sequence */
 PIO_JTAG_INIT:
-    set x, 4 side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH)
+    set x, 4 side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH) /* minimum 5 cycles with TMS high */
 PIO_JTAG_RESET_LOOP:
     set pins, SET_TRST_HIGH side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_HIGH) [1]
     nop                     side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH)
     jmp x--  PIO_JTAG_RESET_LOOP
 PIO_JTAG_IDLE_STATE:
     nop                     side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_LOW) [1]
-    jmp 0                   side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_LOW) [1]
+    nop                     side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_LOW) [1]
 
 .wrap

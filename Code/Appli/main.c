@@ -190,40 +190,25 @@ void main_Core1(void)
 
   /* fill the TX fifo */
   PIO0->TXF0 = 0; /* init */
-  PIO0->TXF0 = 2; /* 4 - 2 */
-  PIO0->TXF0 = 15;
-  PIO0->TXF0 = 30; /* 32 - 2 */
-  PIO0->TXF0 = 0xb15b00b5;
-
-
-  for(uint32 i=0;i<4;i++)
-  {
-    volatile uint32 x = PIO0->RXF0;
-    x = x;
-  }
-
-
+  while(PIO0->FSTAT.bit.TXFULL);
 
   while(1)
   {
     LED_GREEN_TOGGLE();
     BlockingDelay(10000000);
     
-    PIO0->TXF0 = 2; /* 4 - 2 */
-    PIO0->TXF0 = 5;
+    PIO0->TXF0 = 7; /* 9 - 2 */
+    PIO0->TXF0 = 0x1E;
     PIO0->TXF0 = 62; /* 64 - 2 */
-    PIO0->TXF0 = 0xdeadbeef; /* LSB of 64-bit */
-    //for(uint32 i=0;i<10;i++)
-      __asm volatile("nop");
+    PIO0->TXF0 = 0xdeadbeef;
     while(PIO0->FSTAT.bit.TXFULL);
-    PIO0->TXF0 = 0xb15b00b5; /* MSB of 64-bit */
-  
-  for(uint32 i=0;i<4;i++)
-  {
-    volatile uint32 x = PIO0->RXF0;
-    x = x;
-  }
-  }
+    PIO0->TXF0 = 0xdeadbeef; /* MSB of 64-bit */
+    while(PIO0->FSTAT.bit.TXFULL);
 
-
+    for(uint32 i=0;i<4;i++)
+    {
+      volatile uint32 x = PIO0->RXF0;
+      x = x;
+    }
+  }
 }

@@ -100,45 +100,46 @@ static inline pio_sm_config PIO_JTAG_RESET_AND_IDLE_program_get_default_config(u
 // -------- //
 
 #define PIO_JTAG_wrap_target 0
-#define PIO_JTAG_wrap 27
+#define PIO_JTAG_wrap 28
 
 static const uint16_t PIO_JTAG_program_instructions[] = {
             //     .wrap_target
     0xe041, //  0: set    y, 1                       
-    0x6020, //  1: out    x, 32                      
-    0x0036, //  2: jmp    !x, 22                     
-    0xf501, //  3: set    pins, 1         side 1 [1] 
-    0xfd01, //  4: set    pins, 1         side 3 [1] 
-    0xf501, //  5: set    pins, 1         side 1 [1] 
-    0xfd01, //  6: set    pins, 1         side 3 [1] 
-    0xf101, //  7: set    pins, 1         side 0 [1] 
-    0xf901, //  8: set    pins, 1         side 2 [1] 
-    0xf101, //  9: set    pins, 1         side 0 [1] 
-    0xf901, // 10: set    pins, 1         side 2 [1] 
-    0x7201, // 11: out    pins, 1         side 0 [2] 
-    0xb842, // 12: nop                    side 2     
-    0x4001, // 13: in     pins, 1                    
-    0x004b, // 14: jmp    x--, 11                    
-    0x7601, // 15: out    pins, 1         side 1 [2] 
-    0xbd42, // 16: nop                    side 3 [1] 
-    0x4001, // 17: in     pins, 1                    
-    0x8020, // 18: push   block                      
-    0x0081, // 19: jmp    y--, 1                     
-    0xf501, // 20: set    pins, 1         side 1 [1] 
-    0x1d1a, // 21: jmp    26              side 3 [1] 
-    0xfc24, // 22: set    x, 4            side 3     
-    0xf501, // 23: set    pins, 1         side 1 [1] 
-    0xbc42, // 24: nop                    side 3     
-    0x0057, // 25: jmp    x--, 23                    
-    0xb142, // 26: nop                    side 0 [1] 
-    0xb942, // 27: nop                    side 2 [1] 
+    0x80a0, //  1: pull   block                      
+    0x6020, //  2: out    x, 32                      
+    0x0037, //  3: jmp    !x, 23                     
+    0xf501, //  4: set    pins, 1         side 1 [1] 
+    0xfd01, //  5: set    pins, 1         side 3 [1] 
+    0xf501, //  6: set    pins, 1         side 1 [1] 
+    0xfd01, //  7: set    pins, 1         side 3 [1] 
+    0xf101, //  8: set    pins, 1         side 0 [1] 
+    0xf901, //  9: set    pins, 1         side 2 [1] 
+    0xf101, // 10: set    pins, 1         side 0 [1] 
+    0xf901, // 11: set    pins, 1         side 2 [1] 
+    0x7201, // 12: out    pins, 1         side 0 [2] 
+    0xb842, // 13: nop                    side 2     
+    0x4001, // 14: in     pins, 1                    
+    0x004c, // 15: jmp    x--, 12                    
+    0x7601, // 16: out    pins, 1         side 1 [2] 
+    0xbd42, // 17: nop                    side 3 [1] 
+    0x4001, // 18: in     pins, 1                    
+    0x8020, // 19: push   block                      
+    0x0081, // 20: jmp    y--, 1                     
+    0xf501, // 21: set    pins, 1         side 1 [1] 
+    0x1d1b, // 22: jmp    27              side 3 [1] 
+    0xfc24, // 23: set    x, 4            side 3     
+    0xf501, // 24: set    pins, 1         side 1 [1] 
+    0xbc42, // 25: nop                    side 3     
+    0x0058, // 26: jmp    x--, 24                    
+    0xb142, // 27: nop                    side 0 [1] 
+    0xb942, // 28: nop                    side 2 [1] 
             //     .wrap
 };
 
 #if !PICO_NO_HARDWARE
 static const struct pio_program PIO_JTAG_program = {
     .instructions = PIO_JTAG_program_instructions,
-    .length = 28,
+    .length = 29,
     .origin = -1,
 };
 

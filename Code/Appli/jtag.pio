@@ -118,8 +118,11 @@ PIO_JTAG_RESET_LOOP:
              */
 
 PIO_JTAG_DRIVE_TDI_LOOP_TWICE:
-
     /* read two FIFO's entries (size, data) in each pass */
+    pull /* this pull is needed even in the AUTOPULL mode, as the PIO has a read OSR HW limitation.
+            without this pull instruction x will contain 0 when the OSR is filled automatically
+            by the out instruction that shift out the data
+         */
     out x, 32 /* get the size by AUTOPULL the FIFO (OSR is empty) or stall if FIFO is empty */
     jmp !x PIO_JTAG_INIT /* x=0 means a request to output the JTAG init sequence */
 

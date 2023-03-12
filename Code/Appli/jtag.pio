@@ -127,14 +127,14 @@ PIO_JTAG_DRIVE_TDI_LOOP_TWICE:
     jmp !x PIO_JTAG_INIT /* x=0 means a request to output the JTAG init sequence */
 
     /* transition to Shift-IR / Shift-DR */
-    set pins, (SET_TDI_LOW | SET_TRST_HIGH) side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_HIGH) [1]
-    set pins, (SET_TDI_LOW | SET_TRST_HIGH) side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH) [1]
-    set pins, (SET_TDI_LOW | SET_TRST_HIGH) side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_HIGH) [1]
-    set pins, (SET_TDI_LOW | SET_TRST_HIGH) side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH) [1]
-    set pins, (SET_TDI_LOW | SET_TRST_HIGH) side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_LOW)  [1]
-    set pins, (SET_TDI_LOW | SET_TRST_HIGH) side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_LOW)  [1]
-    set pins, (SET_TDI_LOW | SET_TRST_HIGH) side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_LOW)  [1]
-    set pins, (SET_TDI_LOW | SET_TRST_HIGH) side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_LOW)  [1]
+    set pins, (SET_TDI_LOW | SET_TRST_HIGH) side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_HIGH) [2]
+    set pins, (SET_TDI_LOW | SET_TRST_HIGH) side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH) [2]
+    set pins, (SET_TDI_LOW | SET_TRST_HIGH) side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_HIGH) [2]
+    set pins, (SET_TDI_LOW | SET_TRST_HIGH) side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH) [2]
+    set pins, (SET_TDI_LOW | SET_TRST_HIGH) side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_LOW)  [2]
+    set pins, (SET_TDI_LOW | SET_TRST_HIGH) side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_LOW)  [2]
+    set pins, (SET_TDI_LOW | SET_TRST_HIGH) side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_LOW)  [2]
+    set pins, (SET_TDI_LOW | SET_TRST_HIGH) side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_LOW)  [2]
 
 PIO_JTAG_DRIVE_TDI_LOOP:
     out pins, SHIFT_OUT_ONE_BIT side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_LOW)  [2]
@@ -151,18 +151,18 @@ PIO_JTAG_DRIVE_TDI_LOOP:
     ;irq set 0
 
     /* transition to Run-Test/Idle JTAG state */
-    set pins, (SET_TDI_LOW | SET_TRST_HIGH) side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_HIGH) [1]
-    jmp PIO_JTAG_IDLE_STATE                 side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH) [1]
+    set pins, (SET_TDI_LOW | SET_TRST_HIGH) side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_HIGH) [2]
+    jmp PIO_JTAG_IDLE_STATE                 side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH) [2]
 
     /* JTAG init sequence */
 PIO_JTAG_INIT:
     set x, 4 side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH) /* minimum 5 cycles with TMS high */
 PIO_JTAG_RESET_LOOP:
-    set pins, SET_TRST_HIGH side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_HIGH) [1]
-    nop                     side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH)
+    set pins, SET_TRST_HIGH side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_HIGH) [2]
+    nop                     side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH) [1]
     jmp x--  PIO_JTAG_RESET_LOOP
 PIO_JTAG_IDLE_STATE:
-    nop                     side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_LOW) [1]
-    nop                     side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_LOW) [1]
+    nop                     side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_LOW) [2]
+    nop                     side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_LOW) [2]
 
 .wrap

@@ -22,9 +22,8 @@
 #include "Cpu.h"
 #include "Gpio.h"
 #include "SysTickTimer.h"
-
-#define PICO_NO_HARDWARE 1
 #include "jtag.h"
+
 //=============================================================================
 // Macros
 //=============================================================================
@@ -126,89 +125,17 @@ void main_Core1(void)
   /* Synchronize with core 0 */
   RP2040_MulticoreSync(SIO->CPUID);
 
-  /* configure PIO JTAG pin */
-  IO_BANK0->GPIO0_CTRL.bit.FUNCSEL = IO_BANK0_GPIO0_CTRL_FUNCSEL_pio0_0;
-  IO_BANK0->GPIO1_CTRL.bit.FUNCSEL = IO_BANK0_GPIO1_CTRL_FUNCSEL_pio0_1;
-  IO_BANK0->GPIO2_CTRL.bit.FUNCSEL = IO_BANK0_GPIO2_CTRL_FUNCSEL_pio0_2;
-  IO_BANK0->GPIO3_CTRL.bit.FUNCSEL = IO_BANK0_GPIO3_CTRL_FUNCSEL_pio0_3;
-  IO_BANK0->GPIO4_CTRL.bit.FUNCSEL = IO_BANK0_GPIO4_CTRL_FUNCSEL_pio0_4;
+  volatile uint64 x = (uint64)-1;
 
-  /* Release PIO0 reset */
-  RESETS->RESET.bit.pio0 = 0;
-  while(RESETS->RESET_DONE.bit.pio0 == 0U);
-
-  /* copy the compiled pio assembly code into the pio memory instruction */
-  for(uint32 i=0; i < (sizeof(PIO_JTAG_program_instructions) / sizeof(uint16_t)); i++)
-  {
-    ((uint32*)&(PIO0->INSTR_MEM0.reg))[i] = (uint32)PIO_JTAG_program_instructions[i];
-  }
-
-  /* configure the SM0 cycle to 0.5 us (2MHz) */
-  PIO0->SM0_CLKDIV.bit.FRAC = 0;
-  PIO0->SM0_CLKDIV.bit.INT  = 133/2;
-
-  /* configure PIO pin direction */
-  PIO0->SM0_PINCTRL.reg = 0;
-  PIO0->SM0_PINCTRL.bit.SET_BASE  = 0;
-  PIO0->SM0_PINCTRL.bit.SET_COUNT = 5;
-  PIO0->SM0_INSTR.reg = (uint32_t)PIO_JTAG_SET_PIN_CONFIG_program_instructions[0];
-
-  /* configure PIO outputs to logic 1 */
-  PIO0->SM0_PINCTRL.reg = 0;
-  PIO0->SM0_PINCTRL.bit.SET_BASE  = 0;
-  PIO0->SM0_PINCTRL.bit.SET_COUNT = 4;
-  PIO0->SM0_INSTR.reg = (uint32_t)PIO_JTAG_SET_PIN_OUTPUT_program_instructions[0];
-
-  /* enable side-set opt */
-  PIO0->SM0_EXECCTRL.bit.SIDE_EN = 1;
-
-  /* configure wrap */
-  PIO0->SM0_EXECCTRL.bit.WRAP_TOP    = PIO_JTAG_wrap;
-  PIO0->SM0_EXECCTRL.bit.WRAP_BOTTOM = PIO_JTAG_wrap_target;
-
-  /* configure pins */
-  PIO0->SM0_PINCTRL.bit.SIDESET_BASE  = 1;
-  PIO0->SM0_PINCTRL.bit.SIDESET_COUNT = 3; // Physical side-set pins (+ 1 if side-set opt is used)
-  
-  PIO0->SM0_PINCTRL.bit.OUT_BASE      = 3;
-  PIO0->SM0_PINCTRL.bit.OUT_COUNT     = 1;
-
-  PIO0->SM0_PINCTRL.bit.SET_BASE      = 0;
-  PIO0->SM0_PINCTRL.bit.SET_COUNT     = 4;
-
-  PIO0->SM0_PINCTRL.bit.IN_BASE       = 4;
-
-  /* configure the shift reg */
-  PIO0->SM0_SHIFTCTRL.reg = 0;
-  PIO0->SM0_SHIFTCTRL.bit.IN_SHIFTDIR  = 1;
-  PIO0->SM0_SHIFTCTRL.bit.OUT_SHIFTDIR = 1;
-  PIO0->SM0_SHIFTCTRL.bit.AUTOPULL     = 1;
-  PIO0->SM0_SHIFTCTRL.bit.AUTOPUSH     = 1;
-
-  /* enable the SM0 */
-  PIO0->CTRL.bit.SM_ENABLE = 1;
-
-  /* fill the TX fifo */
-  PIO0->TXF0 = 0; /* init */
-  while(PIO0->FSTAT.bit.TXFULL);
+  jtag_init();
 
   while(1)
   {
     LED_GREEN_TOGGLE();
     BlockingDelay(10000000);
-    
-    PIO0->TXF0 = 7; /* 9 - 2 */
-    PIO0->TXF0 = 0x1E;
-    PIO0->TXF0 = 62; /* 64 - 2 */
-    PIO0->TXF0 = 0xdeadbeef;
-    while(PIO0->FSTAT.bit.TXFULL);
-    PIO0->TXF0 = 0xdeadbeef; /* MSB of 64-bit */
-    while(PIO0->FSTAT.bit.TXFULL);
 
-    for(uint32 i=0;i<4;i++)
-    {
-      volatile uint32 x = PIO0->RXF0;
-      x = x;
-    }
+    /* communicate with the jtag */
+    x = jtag_transfer(0x01, 5, x, 32);
+
   }
 }

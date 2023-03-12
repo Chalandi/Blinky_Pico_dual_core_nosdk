@@ -175,14 +175,14 @@ SRC_FILES := $(SRC_DIR)/Appli/main.c                      \
              $(SRC_DIR)/Mcal/Clock/Clock.c                \
              $(SRC_DIR)/Mcal/Cpu/Cpu.c                    \
              $(SRC_DIR)/Mcal/SysTickTimer/SysTickTimer.c  \
+             $(SRC_DIR)/JTAG/jtag.c                       \
              $(SRC_DIR)/Startup/IntVect.c                 \
              $(SRC_DIR)/Startup/SecondaryBoot.c           \
              $(SRC_DIR)/Startup/Startup.c                 \
              $(SRC_DIR)/Startup/util.s
 
 
-PIO_SRC_FILES := $(SRC_DIR)/Appli/square.pio \
-                 $(SRC_DIR)/Appli/jtag.pio
+PIO_SRC_FILES := $(SRC_DIR)/pio/jtag_pio.pio
 
 ############################################################################################
 # Include Paths
@@ -196,6 +196,7 @@ INC_FILES := $(SRC_DIR)                    \
              $(SRC_DIR)/Mcal/Cpu           \
              $(SRC_DIR)/Mcal/Gpio          \
              $(SRC_DIR)/Mcal/SysTickTimer  \
+             $(SRC_DIR)/JTAG               \
              $(SRC_DIR)/Startup            \
              $(SRC_DIR)/Std                
 

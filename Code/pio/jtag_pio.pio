@@ -148,7 +148,7 @@ PIO_JTAG_DRIVE_TDI_LOOP:
     jmp y-- PIO_JTAG_DRIVE_TDI_LOOP_TWICE
 
     /* set interrupt */
-    ;irq set 0
+    irq set 0
 
     /* transition to Run-Test/Idle JTAG state */
     set pins, (SET_TDI_LOW | SET_TRST_HIGH) side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_HIGH) [2]

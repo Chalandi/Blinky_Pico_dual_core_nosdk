@@ -125,8 +125,8 @@ PIO_SWD_CMD_SHIFT_OUT_DATA:
             - read IDCODE
    */
 .wrap_target
-   set PINDIRS, SET_PINS_DIR_OUTPUT  side SET_PIN_SWCLK_HIGH
-   pull
+   set PINDIRS, SET_PINS_DIR_OUTPUT  side SET_PIN_SWCLK_LOW
+   pull                              side SET_PIN_SWDIO_LOW
    set y, 1
 PIO_SWD_RESET_LOOP_TWICE:
    set x, 31
@@ -148,30 +148,41 @@ PIO_SWD_CMD_SHIFT_HEADER:
    out PINS, 1                         side SET_PIN_SWCLK_LOW  [1]
    jmp x-- PIO_SWD_CMD_SHIFT_HEADER    side SET_PIN_SWCLK_HIGH [1]
 
-   /* shift in the acknowledge bits */
+    /* turnaround */
    set PINDIRS, SET_PINS_DIR_SWDIO_IN  side SET_PIN_SWCLK_LOW  [1]
    set x, 2                            side SET_PIN_SWCLK_HIGH [1]
+
+   /* shift in the acknowledge bits */
 PIO_SWD_CMD_SHIFT_IN_ACK:
    in pins, 1                          side SET_PIN_SWCLK_LOW  [1]
     jmp x-- PIO_SWD_CMD_SHIFT_IN_ACK   side SET_PIN_SWCLK_HIGH [1]
-    push
 
     /* shift in the data and the parity bit */
     set x, 31 [1]
 PIO_SWD_CMD_SHIFT_IN_DATA:
     in PINS, 1                         side SET_PIN_SWCLK_LOW  [1]
     jmp x-- PIO_SWD_CMD_SHIFT_IN_DATA  side SET_PIN_SWCLK_HIGH [1]
-    push
-    in PINS, 1                         side SET_PIN_SWCLK_LOW  [1]
-    push                               side SET_PIN_SWCLK_HIGH [1]
-   jmp 0                               side SET_PIN_SWCLK_LOW  [1]
+
+    /* parity bit */
+    set x, 10                          side SET_PIN_SWCLK_LOW  [1]
+    nop                                side SET_PIN_SWCLK_HIGH [1]
+
+    /* turnaround */
+    set PINDIRS, SET_PINS_DIR_OUTPUT   side SET_PIN_SWCLK_LOW  [1]
+
+    /* idle cycles */
+PIO_SWD_CMD_OUTPUT_IDLE_STATE:
+    set PINS, SET_PIN_SWDIO_LOW    side SET_PIN_SWCLK_HIGH  [1]
+    jmp x-- PIO_SWD_CMD_OUTPUT_IDLE_STATE  side SET_PIN_SWCLK_LOW [1]
+
+
+   jmp 0                                   side SET_PIN_SWCLK_LOW  [1]
 
 PIO_SWD_RESET_OUTPUT_MAGIC_CODE:
    set x, 15
 PIO_SWD_RESET_SHIFT_MAGIC_CODE:
    out PINS, 1 side SET_PIN_SWCLK_LOW [1]
    jmp x-- PIO_SWD_RESET_SHIFT_MAGIC_CODE side SET_PIN_SWCLK_HIGH [1]
-   //out x, 16 /* read to empty the OSR (MSB 16-bit) */
    jmp PIO_SWD_RESET_CONTINUE
 
 .wrap

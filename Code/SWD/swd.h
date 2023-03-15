@@ -1,5 +1,5 @@
 /******************************************************************************************
-  Filename    : jtag.h
+  Filename    : swd.h
   
   Core        : ARM Cortex-M0+
   
@@ -11,12 +11,12 @@
   
   Date        : 13.03.2023
   
-  Description : jtag protocol implementation
+  Description : swd protocol implementation
   
 ******************************************************************************************/
 
-#ifndef __JTAG_H__
-#define __JTAG_H__
+#ifndef __SWD_H__
+#define __SWD_H__
 
 //=============================================================================
 // Includes
@@ -26,8 +26,9 @@
 //=============================================================================
 // Prototypes
 //=============================================================================
-void jtag_SetClock(uint32 jtag_freq);
-void jtag_init(void);
-uint64 jtag_transfer(uint64 IrReg, uint32 IrRegLen, uint64 DrData, uint32 DrDataLen);
+void   swd_SetClock(uint32 swd_freq);
+void   swd_init(void);
+uint64 swd_read(uint8 header, uint8* Ack);
+void   swd_write(uint8 header, uint8* Ack, uint64 data);
 
 #endif

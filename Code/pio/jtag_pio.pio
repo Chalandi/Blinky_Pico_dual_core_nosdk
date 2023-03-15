@@ -1,3 +1,19 @@
+/***********************************************************************************************************************
+  Filename    : jtag_pio.pio
+  
+  Core        : PIO
+  
+  MCU         : RP2040 (PIO)
+    
+  Author      : Chalandi Amine
+ 
+  Owner       : Chalandi Amine
+  
+  Date        : 13.03.2023
+  
+  Description : Configuring the programmable IO (PIO) to drive JTAG protocol signals
+  
+***********************************************************************************************************************/
 /*
   The IEEE standard defines the following TAP signals, used for the serial communication and driving the TAP
   controller (JTAG state machine):
@@ -88,7 +104,7 @@
 /*************************************************************************************/
 /* This program is executed by the PIO state machine to reset the JTAG TAP */
 /*************************************************************************************/
-.program PIO_JTAG_RESET_AND_IDLE
+.program PIO_JTAG_RESET_AND_ENTER_IDLE_STATE
 .side_set 2 opt
 .wrap_target
     set x, 4 side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH)
@@ -144,7 +160,7 @@ PIO_JTAG_DRIVE_TDI_LOOP:
     out pins, SHIFT_OUT_ONE_BIT side (SIDE_SET_TCK_LOW  | SIDE_SET_TMS_HIGH) [2]  /* output the last bit of data with TMS high */
     nop                         side (SIDE_SET_TCK_HIGH | SIDE_SET_TMS_HIGH) [1]
     in  pins, SHIFT_IN_ONE_BIT                                                    /* AUTOPUSH to FIFO if ISR is full (32-bit) */
-    push block                                                                    /* Manual push of the DATA higher than 32-bit */
+    push noblock                                                                  /* Manual push the reset of input data modulo 32-bit or zeros (in case of automatic push already performed) */
     jmp y-- PIO_JTAG_DRIVE_TDI_LOOP_TWICE
 
     /* set interrupt */

@@ -62,14 +62,14 @@ static inline pio_sm_config PIO_JTAG_SET_PIN_OUTPUT_program_get_default_config(u
 }
 #endif
 
-// ----------------------- //
-// PIO_JTAG_RESET_AND_IDLE //
-// ----------------------- //
+// ----------------------------------- //
+// PIO_JTAG_RESET_AND_ENTER_IDLE_STATE //
+// ----------------------------------- //
 
-#define PIO_JTAG_RESET_AND_IDLE_wrap_target 0
-#define PIO_JTAG_RESET_AND_IDLE_wrap 5
+#define PIO_JTAG_RESET_AND_ENTER_IDLE_STATE_wrap_target 0
+#define PIO_JTAG_RESET_AND_ENTER_IDLE_STATE_wrap 5
 
-static const uint16_t PIO_JTAG_RESET_AND_IDLE_program_instructions[] = {
+static const uint16_t PIO_JTAG_RESET_AND_ENTER_IDLE_STATE_program_instructions[] = {
             //     .wrap_target
     0xfc24, //  0: set    x, 4            side 3     
     0xf501, //  1: set    pins, 1         side 1 [1] 
@@ -81,15 +81,15 @@ static const uint16_t PIO_JTAG_RESET_AND_IDLE_program_instructions[] = {
 };
 
 #if !PICO_NO_HARDWARE
-static const struct pio_program PIO_JTAG_RESET_AND_IDLE_program = {
-    .instructions = PIO_JTAG_RESET_AND_IDLE_program_instructions,
+static const struct pio_program PIO_JTAG_RESET_AND_ENTER_IDLE_STATE_program = {
+    .instructions = PIO_JTAG_RESET_AND_ENTER_IDLE_STATE_program_instructions,
     .length = 6,
     .origin = -1,
 };
 
-static inline pio_sm_config PIO_JTAG_RESET_AND_IDLE_program_get_default_config(uint offset) {
+static inline pio_sm_config PIO_JTAG_RESET_AND_ENTER_IDLE_STATE_program_get_default_config(uint offset) {
     pio_sm_config c = pio_get_default_sm_config();
-    sm_config_set_wrap(&c, offset + PIO_JTAG_RESET_AND_IDLE_wrap_target, offset + PIO_JTAG_RESET_AND_IDLE_wrap);
+    sm_config_set_wrap(&c, offset + PIO_JTAG_RESET_AND_ENTER_IDLE_STATE_wrap_target, offset + PIO_JTAG_RESET_AND_ENTER_IDLE_STATE_wrap);
     sm_config_set_sideset(&c, 3, true, false);
     return c;
 }
@@ -123,7 +123,7 @@ static const uint16_t PIO_JTAG_program_instructions[] = {
     0x7601, // 16: out    pins, 1         side 1 [2] 
     0xbd42, // 17: nop                    side 3 [1] 
     0x4001, // 18: in     pins, 1                    
-    0x8020, // 19: push   block                      
+    0x8000, // 19: push   noblock                    
     0x0081, // 20: jmp    y--, 1                     
     0xc000, // 21: irq    nowait 0                   
     0xf601, // 22: set    pins, 1         side 1 [2] 

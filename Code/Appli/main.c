@@ -23,6 +23,7 @@
 #include "Gpio.h"
 #include "SysTickTimer.h"
 #include "jtag.h"
+#include "swd.h"
 
 //=============================================================================
 // Macros
@@ -128,14 +129,32 @@ void main_Core1(void)
   volatile uint64 x = (uint64)-1;
 
   jtag_init();
+  swd_init();
+
+  /* discover the JTAG TAPs */
+  x = jtag_transfer((uint64)-1, 64,(uint32)-1, 32);
+
 
   while(1)
   {
     LED_GREEN_TOGGLE();
     BlockingDelay(10000000);
 
-    /* communicate with the jtag */
+    /* communicate with the jtag tap */
     x = jtag_transfer(0x01, 5, x, 32);
+
+  /* fill the TX fifo */
+  PIO1->TXF0 = 0xa5;
+  PIO1->TXF0 = 0x01;
+  while(PIO1->FSTAT.bit.TXFULL);
+
+  BlockingDelay(100);
+
+  /* read the RX FIFO */
+  for(uint32 i=0; i<4; i++)
+  {
+    PIO1->RXF0;
+  }
 
   }
 }

@@ -1,11 +1,36 @@
+/******************************************************************************************
+  Filename    : jtag.c
+  
+  Core        : ARM Cortex-M0+
+  
+  MCU         : RP2040
+    
+  Author      : Chalandi Amine
+ 
+  Owner       : Chalandi Amine
+  
+  Date        : 13.03.2023
+  
+  Description : jtag protocol implementation
+  
+******************************************************************************************/
 
-#include "Platform_Types.h"
+//=============================================================================
+// Includes
+//=============================================================================
 #include "jtag.h"
 #include "RP2040.h"
 #define PICO_NO_HARDWARE 1
 #include "jtag_pio.h"
 
 
+//-----------------------------------------------------------------------------------------
+/// \brief  jtag_SetClock function
+///
+/// \param  void
+///
+/// \return void
+//-----------------------------------------------------------------------------------------
 void jtag_SetClock(uint32 jtag_freq)
 {
   uint32 cpu_freq  = 133;
@@ -18,6 +43,13 @@ void jtag_SetClock(uint32 jtag_freq)
   PIO0->SM0_CLKDIV.bit.INT  = (uint16)x_int;
 }
 
+//-----------------------------------------------------------------------------------------
+/// \brief  main function
+///
+/// \param  void
+///
+/// \return void
+//-----------------------------------------------------------------------------------------
 void jtag_init(void)
 {
   /* configure PIO JTAG pin */
@@ -89,13 +121,19 @@ void jtag_init(void)
   while(PIO0->FSTAT.bit.TXFULL);
 }
 
-
+//-----------------------------------------------------------------------------------------
+/// \brief  main function
+///
+/// \param  void
+///
+/// \return void
+//-----------------------------------------------------------------------------------------
 uint64 jtag_transfer(uint64 IrReg, uint32 IrRegLen, uint64 DrData, uint32 DrDataLen)
 {
   uint64 DrRxData = 0;
 
   PIO0->TXF0 = IrRegLen - 2;
-  PIO0->TXF0 = IrReg;
+  PIO0->TXF0 = (uint32)IrReg;
   if(IrRegLen == 64)
   {
     PIO0->TXF0 = (uint32)(IrReg>>32);

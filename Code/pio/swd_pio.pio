@@ -1,0 +1,176 @@
+/***********************************************************************************************************************
+  Filename    : swd_pio.pio
+  
+  Core        : PIO
+  
+  MCU         : RP2040 (PIO)
+    
+  Author      : Chalandi Amine
+ 
+  Owner       : Chalandi Amine
+  
+  Date        : 13.03.2023
+  
+  Description : Configuring the programmable IO (PIO) to drive swd protocol signals
+  
+***********************************************************************************************************************/
+
+.define PIN_SWCLK   14 // GPIO_0: set/side-set
+.define PIN_SWDIO   15 // GPIO_0: set/in/out
+
+.define PUBLIC PIO_SWD_TICK_PER_SWD_PERIOD 4
+
+.define SET_PIN_DIR_SWCLK_OUTPUT  1
+.define SET_PIN_SWCLK_HIGH        1
+.define SET_PIN_SWCLK_LOW         0
+
+.define SET_PIN_DIR_SWDIO_OUTPUT  2
+.define SET_PIN_DIR_SWDIO_INPUT   0
+.define SET_PIN_SWDIO_HIGH        2
+.define SET_PIN_SWDIO_LOW         0
+
+.define SET_PINS_DIR_OUTPUT    (SET_PIN_DIR_SWCLK_OUTPUT | SET_PIN_DIR_SWDIO_OUTPUT)
+.define SET_PINS_DIR_SWDIO_IN  (SET_PIN_DIR_SWCLK_OUTPUT | SET_PIN_DIR_SWDIO_INPUT)
+
+/********************************************************************************************/
+/* This program is executed by the PIO state machine to perform SWD transfer (rd and wr) */
+/********************************************************************************************/
+.program pio_swd_cmd
+.side_set 1 opt
+
+.wrap_target
+   /*
+      steps:
+            - read one entry from TX FIFO (Header)
+            - output 8 bits on SWDIO
+            - change SWDIO direction to input
+            - read 3 bits (ACK) and store them in RX FIFO
+            - read one TX FIFO entry (OPERATION: WR or RD)
+            
+            in case of read operation:
+            - Read 32-bit DATA from SWDIO and store it in RX FIFO
+            - Read 1-bit Parity bit and store it in RX FIFO
+
+            in case of write operation:
+            - change back SWDIO direction to output
+            - read from FIFO (Data 32 + 1 => 2 FIFO's entries)
+            - write 32 + 1 bits
+
+      TX FIFO: [Header] [Operation Type] [DATA] [Parity]
+      RX FIFO: [ACK] [DATA] [Parity]
+   */
+   set PINDIRS, SET_PINS_DIR_OUTPUT
+   pull
+
+   /* shift out the header */
+   set y, 7
+PIO_SWD_CMD_SHIFT_HEADER:
+   out PINS, 1                        side SET_PIN_SWCLK_HIGH [2]
+   jmp y-- PIO_SWD_CMD_SHIFT_HEADER   side SET_PIN_SWCLK_LOW  [2]
+
+   /* shift in the acknowledge bits */
+   set PINDIRS, SET_PINS_DIR_SWDIO_IN  side SET_PIN_SWCLK_HIGH [4]
+   set y, 2                            side SET_PIN_SWCLK_LOW  [4]
+PIO_SWD_CMD_SHIFT_IN_ACK:
+   in pins, 1                          side SET_PIN_SWCLK_HIGH [2]
+    jmp y-- PIO_SWD_CMD_SHIFT_IN_ACK   side SET_PIN_SWCLK_LOW  [2]
+    push
+
+    /* get the operation type */
+    pull
+    out x, 32
+    jmp !x PIO_SWD_CMD_WRITE
+
+    /* shift in the data and the parity bit */
+    set y, 31
+PIO_SWD_CMD_SHIFT_IN_DATA:
+    in pins, 1                         side SET_PIN_SWCLK_HIGH [2]
+    jmp y-- PIO_SWD_CMD_SHIFT_IN_DATA  side SET_PIN_SWCLK_LOW  [2]
+    push
+    in pins, 1                         side SET_PIN_SWCLK_HIGH [2]
+    nop                                side SET_PIN_SWCLK_LOW  [2]
+    push
+    jmp 0
+
+    /* shift out the data and the parity bit */
+PIO_SWD_CMD_WRITE:
+    set PINDIRS, SET_PINS_DIR_OUTPUT    side SET_PIN_SWCLK_HIGH [2]
+    pull                                side SET_PIN_SWCLK_LOW  [2]
+    set y, 31
+PIO_SWD_CMD_SHIFT_OUT_DATA:
+    out PINS, 1                         side SET_PIN_SWCLK_HIGH [2]
+    jmp y-- PIO_SWD_CMD_SHIFT_OUT_DATA  side SET_PIN_SWCLK_LOW  [2]
+    pull
+    out PINS, 1                         side SET_PIN_SWCLK_HIGH [2]
+    nop                                 side SET_PIN_SWCLK_LOW  [2]
+.wrap
+
+/********************************************************************************************/
+/* This program is executed by the PIO state machine to initialize the SWD (JTAG to SWD) */
+/********************************************************************************************/
+.program pio_swd_reset
+.side_set 1 opt
+   /* 
+      steps:
+            - output 64 clocks with SWDIO high
+            - output 16 bits from FIFO (0xe79e)
+            - output 64 clocks with SWDIO high
+            - idle state
+            - read IDCODE
+   */
+.wrap_target
+   set PINDIRS, SET_PINS_DIR_OUTPUT
+   pull     side SET_PIN_SWCLK_LOW  [1]
+   set y, 1 side SET_PIN_SWCLK_HIGH [1]
+PIO_SWD_RESET_LOOP_TWICE:
+   set x, 31
+PIO_SWD_RESET_32_CYCLES_WITH_SWDIO_HIGH_1:
+   set PINS, (SET_PIN_SWDIO_HIGH | SET_PIN_SWCLK_HIGH) [1]
+   jmp x-- PIO_SWD_RESET_32_CYCLES_WITH_SWDIO_HIGH_1 side SET_PIN_SWCLK_LOW [1]
+   set x, 31
+PIO_SWD_RESET_32_CYCLES_WITH_SWDIO_HIGH_2:
+   set PINS, (SET_PIN_SWDIO_HIGH | SET_PIN_SWCLK_HIGH) [1]
+   jmp x-- PIO_SWD_RESET_32_CYCLES_WITH_SWDIO_HIGH_2 side SET_PIN_SWCLK_LOW [1]
+   jmp !OSRE PIO_SWD_RESET_OUTPUT_MAGIC_CODE
+PIO_SWD_RESET_CONTINUE:
+   jmp y-- PIO_SWD_RESET_LOOP_TWICE
+   /* TODO set interrupt here */
+   //set PINS, (SET_PIN_SWDIO_LOW | SET_PIN_SWCLK_LOW) /* set idle state */
+   /* read the idcode */
+   pull
+
+   /* shift out the header */
+   set x, 7 [1]
+PIO_SWD_CMD_SHIFT_HEADER:
+   out PINS, 1                        side SET_PIN_SWCLK_LOW [2]
+   jmp x-- PIO_SWD_CMD_SHIFT_HEADER   side SET_PIN_SWCLK_HIGH  [3]
+
+   /* shift in the acknowledge bits */
+   nop                                 side SET_PIN_SWCLK_LOW [1]
+   set PINDIRS, SET_PINS_DIR_SWDIO_IN  [3]
+   set x, 2                            side SET_PIN_SWCLK_HIGH  [4]
+PIO_SWD_CMD_SHIFT_IN_ACK:
+   in pins, 1                          side SET_PIN_SWCLK_LOW [2]
+    jmp x-- PIO_SWD_CMD_SHIFT_IN_ACK   side SET_PIN_SWCLK_HIGH  [3]
+    push
+
+    /* shift in the data and the parity bit */
+    set x, 31 [1]
+PIO_SWD_CMD_SHIFT_IN_DATA:
+    in PINS, 1                         side SET_PIN_SWCLK_LOW [2]
+    jmp x-- PIO_SWD_CMD_SHIFT_IN_DATA  side SET_PIN_SWCLK_HIGH  [3]
+    push
+    in PINS, 1                         side SET_PIN_SWCLK_LOW [2]
+    push                               side SET_PIN_SWCLK_HIGH  [2]
+   jmp 0
+
+PIO_SWD_RESET_OUTPUT_MAGIC_CODE:
+   set x, 15
+PIO_SWD_RESET_SHIFT_MAGIC_CODE:
+   out PINS, 1 side SET_PIN_SWCLK_LOW [1]
+   jmp x-- PIO_SWD_RESET_SHIFT_MAGIC_CODE side SET_PIN_SWCLK_HIGH [1]
+   //out x, 16 /* read to empty the OSR (MSB 16-bit) */
+   jmp PIO_SWD_RESET_CONTINUE
+
+.wrap
+

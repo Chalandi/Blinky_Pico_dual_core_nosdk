@@ -179,10 +179,12 @@ SRC_FILES := $(SRC_DIR)/Appli/main.c                      \
              $(SRC_DIR)/Startup/IntVect.c                 \
              $(SRC_DIR)/Startup/SecondaryBoot.c           \
              $(SRC_DIR)/Startup/Startup.c                 \
-             $(SRC_DIR)/Startup/util.s
+             $(SRC_DIR)/Startup/util.s                    \
+             $(SRC_DIR)/SWD/swd.c
 
 
-PIO_SRC_FILES := $(SRC_DIR)/pio/jtag_pio.pio
+PIO_SRC_FILES := $(SRC_DIR)/pio/jtag_pio.pio  \
+                 $(SRC_DIR)/pio/swd_pio.pio
 
 ############################################################################################
 # Include Paths
@@ -198,7 +200,8 @@ INC_FILES := $(SRC_DIR)                    \
              $(SRC_DIR)/Mcal/SysTickTimer  \
              $(SRC_DIR)/JTAG               \
              $(SRC_DIR)/Startup            \
-             $(SRC_DIR)/Std                
+             $(SRC_DIR)/Std                \
+             $(SRC_DIR)/SWD
 
 ############################################################################################
 # Rules

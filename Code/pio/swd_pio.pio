@@ -14,7 +14,13 @@
   Description : Configuring the programmable IO (PIO) to drive swd protocol signals
   
 ***********************************************************************************************************************/
+/*
 
+ SWD protocol:
+ 
+ Host sends data on the SWDIO line on falling edge of SWDCK and target reads that data on the next SWDCK rising edge
+ https://www.cnblogs.com/shangdawei/p/4757044.html
+*/
 .define PIN_SWCLK   14 // GPIO_0: set/side-set
 .define PIN_SWDIO   15 // GPIO_0: set/in/out
 
@@ -119,50 +125,46 @@ PIO_SWD_CMD_SHIFT_OUT_DATA:
             - read IDCODE
    */
 .wrap_target
-   set PINDIRS, SET_PINS_DIR_OUTPUT
-   pull     side SET_PIN_SWCLK_LOW  [1]
-   set y, 1 side SET_PIN_SWCLK_HIGH [1]
+   set PINDIRS, SET_PINS_DIR_OUTPUT  side SET_PIN_SWCLK_HIGH
+   pull
+   set y, 1
 PIO_SWD_RESET_LOOP_TWICE:
    set x, 31
 PIO_SWD_RESET_32_CYCLES_WITH_SWDIO_HIGH_1:
-   set PINS, (SET_PIN_SWDIO_HIGH | SET_PIN_SWCLK_HIGH) [1]
-   jmp x-- PIO_SWD_RESET_32_CYCLES_WITH_SWDIO_HIGH_1 side SET_PIN_SWCLK_LOW [1]
+   set PINS, (SET_PIN_SWDIO_HIGH | SET_PIN_SWCLK_LOW) [1]
+   jmp x-- PIO_SWD_RESET_32_CYCLES_WITH_SWDIO_HIGH_1 side SET_PIN_SWCLK_HIGH [1]
    set x, 31
 PIO_SWD_RESET_32_CYCLES_WITH_SWDIO_HIGH_2:
-   set PINS, (SET_PIN_SWDIO_HIGH | SET_PIN_SWCLK_HIGH) [1]
-   jmp x-- PIO_SWD_RESET_32_CYCLES_WITH_SWDIO_HIGH_2 side SET_PIN_SWCLK_LOW [1]
+   set PINS, (SET_PIN_SWDIO_HIGH | SET_PIN_SWCLK_LOW) [1]
+   jmp x-- PIO_SWD_RESET_32_CYCLES_WITH_SWDIO_HIGH_2 side SET_PIN_SWCLK_HIGH [1]
    jmp !OSRE PIO_SWD_RESET_OUTPUT_MAGIC_CODE
 PIO_SWD_RESET_CONTINUE:
    jmp y-- PIO_SWD_RESET_LOOP_TWICE
-   /* TODO set interrupt here */
-   //set PINS, (SET_PIN_SWDIO_LOW | SET_PIN_SWCLK_LOW) /* set idle state */
-   /* read the idcode */
-   pull
 
    /* shift out the header */
-   set x, 7 [1]
+   pull
+   set x, 7
 PIO_SWD_CMD_SHIFT_HEADER:
-   out PINS, 1                        side SET_PIN_SWCLK_LOW [2]
-   jmp x-- PIO_SWD_CMD_SHIFT_HEADER   side SET_PIN_SWCLK_HIGH  [3]
+   out PINS, 1                         side SET_PIN_SWCLK_LOW  [1]
+   jmp x-- PIO_SWD_CMD_SHIFT_HEADER    side SET_PIN_SWCLK_HIGH [1]
 
    /* shift in the acknowledge bits */
-   nop                                 side SET_PIN_SWCLK_LOW [1]
-   set PINDIRS, SET_PINS_DIR_SWDIO_IN  [3]
-   set x, 2                            side SET_PIN_SWCLK_HIGH  [4]
+   set PINDIRS, SET_PINS_DIR_SWDIO_IN  side SET_PIN_SWCLK_LOW  [1]
+   set x, 2                            side SET_PIN_SWCLK_HIGH [1]
 PIO_SWD_CMD_SHIFT_IN_ACK:
-   in pins, 1                          side SET_PIN_SWCLK_LOW [2]
-    jmp x-- PIO_SWD_CMD_SHIFT_IN_ACK   side SET_PIN_SWCLK_HIGH  [3]
+   in pins, 1                          side SET_PIN_SWCLK_LOW  [1]
+    jmp x-- PIO_SWD_CMD_SHIFT_IN_ACK   side SET_PIN_SWCLK_HIGH [1]
     push
 
     /* shift in the data and the parity bit */
     set x, 31 [1]
 PIO_SWD_CMD_SHIFT_IN_DATA:
-    in PINS, 1                         side SET_PIN_SWCLK_LOW [2]
-    jmp x-- PIO_SWD_CMD_SHIFT_IN_DATA  side SET_PIN_SWCLK_HIGH  [3]
+    in PINS, 1                         side SET_PIN_SWCLK_LOW  [1]
+    jmp x-- PIO_SWD_CMD_SHIFT_IN_DATA  side SET_PIN_SWCLK_HIGH [1]
     push
-    in PINS, 1                         side SET_PIN_SWCLK_LOW [2]
-    push                               side SET_PIN_SWCLK_HIGH  [2]
-   jmp 0
+    in PINS, 1                         side SET_PIN_SWCLK_LOW  [1]
+    push                               side SET_PIN_SWCLK_HIGH [1]
+   jmp 0                               side SET_PIN_SWCLK_LOW  [1]
 
 PIO_SWD_RESET_OUTPUT_MAGIC_CODE:
    set x, 15

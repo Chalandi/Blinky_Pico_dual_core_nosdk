@@ -71,49 +71,48 @@ static inline pio_sm_config pio_swd_cmd_program_get_default_config(uint offset) 
 // ------------- //
 
 #define pio_swd_reset_wrap_target 0
-#define pio_swd_reset_wrap 31
+#define pio_swd_reset_wrap 30
 
 static const uint16_t pio_swd_reset_program_instructions[] = {
             //     .wrap_target
-    0xe083, //  0: set    pindirs, 3                 
-    0x91a0, //  1: pull   block           side 0 [1] 
-    0xf941, //  2: set    y, 1            side 1 [1] 
+    0xf883, //  0: set    pindirs, 3      side 1     
+    0x80a0, //  1: pull   block                      
+    0xe041, //  2: set    y, 1                       
     0xe03f, //  3: set    x, 31                      
-    0xe103, //  4: set    pins, 3                [1] 
-    0x1144, //  5: jmp    x--, 4          side 0 [1] 
+    0xe102, //  4: set    pins, 2                [1] 
+    0x1944, //  5: jmp    x--, 4          side 1 [1] 
     0xe03f, //  6: set    x, 31                      
-    0xe103, //  7: set    pins, 3                [1] 
-    0x1147, //  8: jmp    x--, 7          side 0 [1] 
-    0x00fc, //  9: jmp    !osre, 28                  
+    0xe102, //  7: set    pins, 2                [1] 
+    0x1947, //  8: jmp    x--, 7          side 1 [1] 
+    0x00fb, //  9: jmp    !osre, 27                  
     0x0083, // 10: jmp    y--, 3                     
     0x80a0, // 11: pull   block                      
-    0xe127, // 12: set    x, 7                   [1] 
-    0x7201, // 13: out    pins, 1         side 0 [2] 
-    0x1b4d, // 14: jmp    x--, 13         side 1 [3] 
-    0xb142, // 15: nop                    side 0 [1] 
-    0xe381, // 16: set    pindirs, 1             [3] 
-    0xfc22, // 17: set    x, 2            side 1 [4] 
-    0x5201, // 18: in     pins, 1         side 0 [2] 
-    0x1b52, // 19: jmp    x--, 18         side 1 [3] 
-    0x8020, // 20: push   block                      
-    0xe13f, // 21: set    x, 31                  [1] 
-    0x5201, // 22: in     pins, 1         side 0 [2] 
-    0x1b56, // 23: jmp    x--, 22         side 1 [3] 
-    0x8020, // 24: push   block                      
-    0x5201, // 25: in     pins, 1         side 0 [2] 
-    0x9a20, // 26: push   block           side 1 [2] 
-    0x0000, // 27: jmp    0                          
-    0xe02f, // 28: set    x, 15                      
-    0x7101, // 29: out    pins, 1         side 0 [1] 
-    0x195d, // 30: jmp    x--, 29         side 1 [1] 
-    0x000a, // 31: jmp    10                         
+    0xe027, // 12: set    x, 7                       
+    0x7101, // 13: out    pins, 1         side 0 [1] 
+    0x194d, // 14: jmp    x--, 13         side 1 [1] 
+    0xf181, // 15: set    pindirs, 1      side 0 [1] 
+    0xf922, // 16: set    x, 2            side 1 [1] 
+    0x5101, // 17: in     pins, 1         side 0 [1] 
+    0x1951, // 18: jmp    x--, 17         side 1 [1] 
+    0x8020, // 19: push   block                      
+    0xe13f, // 20: set    x, 31                  [1] 
+    0x5101, // 21: in     pins, 1         side 0 [1] 
+    0x1955, // 22: jmp    x--, 21         side 1 [1] 
+    0x8020, // 23: push   block                      
+    0x5101, // 24: in     pins, 1         side 0 [1] 
+    0x9920, // 25: push   block           side 1 [1] 
+    0x1100, // 26: jmp    0               side 0 [1] 
+    0xe02f, // 27: set    x, 15                      
+    0x7101, // 28: out    pins, 1         side 0 [1] 
+    0x195c, // 29: jmp    x--, 28         side 1 [1] 
+    0x000a, // 30: jmp    10                         
             //     .wrap
 };
 
 #if !PICO_NO_HARDWARE
 static const struct pio_program pio_swd_reset_program = {
     .instructions = pio_swd_reset_program_instructions,
-    .length = 32,
+    .length = 31,
     .origin = -1,
 };
 

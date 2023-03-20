@@ -15,46 +15,49 @@
 // ----------- //
 
 #define pio_swd_cmd_wrap_target 0
-#define pio_swd_cmd_wrap 28
+#define pio_swd_cmd_wrap 31
 
 static const uint16_t pio_swd_cmd_program_instructions[] = {
             //     .wrap_target
-    0xe083, //  0: set    pindirs, 3                 
-    0x80a0, //  1: pull   block                      
+    0xf083, //  0: set    pindirs, 3      side 0     
+    0x90a0, //  1: pull   block           side 0     
     0xe047, //  2: set    y, 7                       
-    0x7a01, //  3: out    pins, 1         side 1 [2] 
-    0x1283, //  4: jmp    y--, 3          side 0 [2] 
-    0xfc81, //  5: set    pindirs, 1      side 1 [4] 
-    0xf442, //  6: set    y, 2            side 0 [4] 
-    0x5a01, //  7: in     pins, 1         side 1 [2] 
-    0x1287, //  8: jmp    y--, 7          side 0 [2] 
+    0x7201, //  3: out    pins, 1         side 0 [2] 
+    0x1a83, //  4: jmp    y--, 3          side 1 [2] 
+    0xf281, //  5: set    pindirs, 1      side 0 [2] 
+    0xfa42, //  6: set    y, 2            side 1 [2] 
+    0x5201, //  7: in     pins, 1         side 0 [2] 
+    0x1a87, //  8: jmp    y--, 7          side 1 [2] 
     0x8020, //  9: push   block                      
     0x80a0, // 10: pull   block                      
     0x6020, // 11: out    x, 32                      
     0x0035, // 12: jmp    !x, 21                     
     0xe05f, // 13: set    y, 31                      
-    0x5a01, // 14: in     pins, 1         side 1 [2] 
-    0x128e, // 15: jmp    y--, 14         side 0 [2] 
+    0x5201, // 14: in     pins, 1         side 0 [2] 
+    0x1a8e, // 15: jmp    y--, 14         side 1 [2] 
     0x8020, // 16: push   block                      
-    0x5a01, // 17: in     pins, 1         side 1 [2] 
-    0xb242, // 18: nop                    side 0 [2] 
+    0x5201, // 17: in     pins, 1         side 0 [2] 
+    0xba42, // 18: nop                    side 1 [2] 
     0x8020, // 19: push   block                      
-    0x0000, // 20: jmp    0                          
-    0xfa83, // 21: set    pindirs, 3      side 1 [2] 
-    0x92a0, // 22: pull   block           side 0 [2] 
+    0x001c, // 20: jmp    28                         
+    0xf283, // 21: set    pindirs, 3      side 0 [2] 
+    0x9aa0, // 22: pull   block           side 1 [2] 
     0xe05f, // 23: set    y, 31                      
-    0x7a01, // 24: out    pins, 1         side 1 [2] 
-    0x1298, // 25: jmp    y--, 24         side 0 [2] 
+    0x7201, // 24: out    pins, 1         side 0 [2] 
+    0x1a98, // 25: jmp    y--, 24         side 1 [2] 
     0x80a0, // 26: pull   block                      
-    0x7a01, // 27: out    pins, 1         side 1 [2] 
-    0xb242, // 28: nop                    side 0 [2] 
+    0x7201, // 27: out    pins, 1         side 0 [2] 
+    0xfa29, // 28: set    x, 9            side 1 [2] 
+    0xf183, // 29: set    pindirs, 3      side 0 [1] 
+    0xf900, // 30: set    pins, 0         side 1 [1] 
+    0x115e, // 31: jmp    x--, 30         side 0 [1] 
             //     .wrap
 };
 
 #if !PICO_NO_HARDWARE
 static const struct pio_program pio_swd_cmd_program = {
     .instructions = pio_swd_cmd_program_instructions,
-    .length = 29,
+    .length = 32,
     .origin = -1,
 };
 

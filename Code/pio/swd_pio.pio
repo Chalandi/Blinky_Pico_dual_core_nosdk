@@ -48,38 +48,40 @@
    /*
       steps:
             - read one entry from TX FIFO (Header)
-            - output 8 bits on SWDIO
-            - change SWDIO direction to input
-            - read 3 bits (ACK) and store them in RX FIFO
+            - shift out 8-bit on SWDIO
+            - change SWDIO direction to input and introduce a turnaround period
+            - shift in 3-bit (ACK) and store them in RX FIFO
             - read one TX FIFO entry (OPERATION: WR or RD)
             
             in case of read operation:
-            - Read 32-bit DATA from SWDIO and store it in RX FIFO
-            - Read 1-bit Parity bit and store it in RX FIFO
+            - shift in 32-bit DATA from SWDIO and store it in RX FIFO
+            - shift in  1-bit Parity bit and store it in RX FIFO
+            - insert idle state
 
             in case of write operation:
-            - change back SWDIO direction to output
+            - change back SWDIO direction to output and introduce a turnaround period
             - read from FIFO (Data 32 + 1 => 2 FIFO's entries)
-            - write 32 + 1 bits
+            - shift out 32-bit + 1-bit on SWDIO
+            - insert idle state
 
-      TX FIFO: [Header] [Operation Type] [DATA] [Parity]
+      TX FIFO: [Header] [Operation Type (RD=1, WR=0)] [DATA] [Parity]
       RX FIFO: [ACK] [DATA] [Parity]
    */
-   set PINDIRS, SET_PINS_DIR_OUTPUT
-   pull
+   set PINDIRS, SET_PINS_DIR_OUTPUT  side SET_PIN_SWCLK_LOW
+   pull                              side SET_PIN_SWDIO_LOW
 
    /* shift out the header */
    set y, 7
 PIO_SWD_CMD_SHIFT_HEADER:
-   out PINS, 1                        side SET_PIN_SWCLK_HIGH [2]
-   jmp y-- PIO_SWD_CMD_SHIFT_HEADER   side SET_PIN_SWCLK_LOW  [2]
+   out PINS, 1                        side SET_PIN_SWCLK_LOW  [2]
+   jmp y-- PIO_SWD_CMD_SHIFT_HEADER   side SET_PIN_SWCLK_HIGH [2]
 
    /* shift in the acknowledge bits */
-   set PINDIRS, SET_PINS_DIR_SWDIO_IN  side SET_PIN_SWCLK_HIGH [4]
-   set y, 2                            side SET_PIN_SWCLK_LOW  [4]
+   set PINDIRS, SET_PINS_DIR_SWDIO_IN  side SET_PIN_SWCLK_LOW  [2]
+   set y, 2                            side SET_PIN_SWCLK_HIGH [2]
 PIO_SWD_CMD_SHIFT_IN_ACK:
-   in pins, 1                          side SET_PIN_SWCLK_HIGH [2]
-    jmp y-- PIO_SWD_CMD_SHIFT_IN_ACK   side SET_PIN_SWCLK_LOW  [2]
+   in pins, 1                          side SET_PIN_SWCLK_LOW  [2]
+    jmp y-- PIO_SWD_CMD_SHIFT_IN_ACK   side SET_PIN_SWCLK_HIGH [2]
     push
 
     /* get the operation type */
@@ -90,25 +92,32 @@ PIO_SWD_CMD_SHIFT_IN_ACK:
     /* shift in the data and the parity bit */
     set y, 31
 PIO_SWD_CMD_SHIFT_IN_DATA:
-    in pins, 1                         side SET_PIN_SWCLK_HIGH [2]
-    jmp y-- PIO_SWD_CMD_SHIFT_IN_DATA  side SET_PIN_SWCLK_LOW  [2]
+    in pins, 1                         side SET_PIN_SWCLK_LOW  [2]
+    jmp y-- PIO_SWD_CMD_SHIFT_IN_DATA  side SET_PIN_SWCLK_HIGH [2]
     push
-    in pins, 1                         side SET_PIN_SWCLK_HIGH [2]
-    nop                                side SET_PIN_SWCLK_LOW  [2]
+    in pins, 1                         side SET_PIN_SWCLK_LOW  [2]
+    nop                                side SET_PIN_SWCLK_HIGH [2]
     push
-    jmp 0
+    jmp PIO_SWD_CMD_IDLE
 
     /* shift out the data and the parity bit */
 PIO_SWD_CMD_WRITE:
-    set PINDIRS, SET_PINS_DIR_OUTPUT    side SET_PIN_SWCLK_HIGH [2]
-    pull                                side SET_PIN_SWCLK_LOW  [2]
+    set PINDIRS, SET_PINS_DIR_OUTPUT    side SET_PIN_SWCLK_LOW  [2]
+    pull                                side SET_PIN_SWCLK_HIGH [2]
     set y, 31
 PIO_SWD_CMD_SHIFT_OUT_DATA:
-    out PINS, 1                         side SET_PIN_SWCLK_HIGH [2]
-    jmp y-- PIO_SWD_CMD_SHIFT_OUT_DATA  side SET_PIN_SWCLK_LOW  [2]
+    out PINS, 1                         side SET_PIN_SWCLK_LOW  [2]
+    jmp y-- PIO_SWD_CMD_SHIFT_OUT_DATA  side SET_PIN_SWCLK_HIGH [2]
     pull
-    out PINS, 1                         side SET_PIN_SWCLK_HIGH [2]
-    nop                                 side SET_PIN_SWCLK_LOW  [2]
+    out PINS, 1                         side SET_PIN_SWCLK_LOW  [2]
+PIO_SWD_CMD_IDLE:
+    set x, 9                            side SET_PIN_SWCLK_HIGH [2]
+
+
+    set PINDIRS, SET_PINS_DIR_OUTPUT       side SET_PIN_SWCLK_LOW  [1]
+PIO_SWD_CMD_OUTPUT_IDLE_STATE:
+    set PINS, SET_PIN_SWDIO_LOW            side SET_PIN_SWCLK_HIGH [1]
+    jmp x-- PIO_SWD_CMD_OUTPUT_IDLE_STATE  side SET_PIN_SWCLK_LOW  [1]
 .wrap
 
 /********************************************************************************************/
@@ -145,44 +154,42 @@ PIO_SWD_RESET_CONTINUE:
    pull
    set x, 7
 PIO_SWD_CMD_SHIFT_HEADER:
-   out PINS, 1                         side SET_PIN_SWCLK_LOW  [1]
-   jmp x-- PIO_SWD_CMD_SHIFT_HEADER    side SET_PIN_SWCLK_HIGH [1]
+   out PINS, 1                             side SET_PIN_SWCLK_LOW  [1]
+   jmp x-- PIO_SWD_CMD_SHIFT_HEADER        side SET_PIN_SWCLK_HIGH [1]
 
     /* turnaround */
-   set PINDIRS, SET_PINS_DIR_SWDIO_IN  side SET_PIN_SWCLK_LOW  [1]
-   set x, 2                            side SET_PIN_SWCLK_HIGH [1]
+   set PINDIRS, SET_PINS_DIR_SWDIO_IN      side SET_PIN_SWCLK_LOW  [1]
+   set x, 2                                side SET_PIN_SWCLK_HIGH [1]
 
    /* shift in the acknowledge bits */
 PIO_SWD_CMD_SHIFT_IN_ACK:
-   in pins, 1                          side SET_PIN_SWCLK_LOW  [1]
-    jmp x-- PIO_SWD_CMD_SHIFT_IN_ACK   side SET_PIN_SWCLK_HIGH [1]
+   in pins, 1                              side SET_PIN_SWCLK_LOW  [1]
+    jmp x-- PIO_SWD_CMD_SHIFT_IN_ACK       side SET_PIN_SWCLK_HIGH [1]
 
     /* shift in the data and the parity bit */
     set x, 31 [1]
 PIO_SWD_CMD_SHIFT_IN_DATA:
-    in PINS, 1                         side SET_PIN_SWCLK_LOW  [1]
-    jmp x-- PIO_SWD_CMD_SHIFT_IN_DATA  side SET_PIN_SWCLK_HIGH [1]
+    in PINS, 1                             side SET_PIN_SWCLK_LOW  [1]
+    jmp x-- PIO_SWD_CMD_SHIFT_IN_DATA      side SET_PIN_SWCLK_HIGH [1]
 
     /* parity bit */
-    set x, 10                          side SET_PIN_SWCLK_LOW  [1]
-    nop                                side SET_PIN_SWCLK_HIGH [1]
+    set x, 10                              side SET_PIN_SWCLK_LOW  [1]
+    nop                                    side SET_PIN_SWCLK_HIGH [1]
 
     /* turnaround */
-    set PINDIRS, SET_PINS_DIR_OUTPUT   side SET_PIN_SWCLK_LOW  [1]
+    set PINDIRS, SET_PINS_DIR_OUTPUT       side SET_PIN_SWCLK_LOW  [1]
 
     /* idle cycles */
 PIO_SWD_CMD_OUTPUT_IDLE_STATE:
-    set PINS, SET_PIN_SWDIO_LOW    side SET_PIN_SWCLK_HIGH  [1]
-    jmp x-- PIO_SWD_CMD_OUTPUT_IDLE_STATE  side SET_PIN_SWCLK_LOW [1]
-
-
-   jmp 0                                   side SET_PIN_SWCLK_LOW  [1]
+    set PINS, SET_PIN_SWDIO_LOW            side SET_PIN_SWCLK_HIGH [1]
+    jmp x-- PIO_SWD_CMD_OUTPUT_IDLE_STATE  side SET_PIN_SWCLK_LOW  [1]
+    jmp 0                                  side SET_PIN_SWCLK_LOW  [1]
 
 PIO_SWD_RESET_OUTPUT_MAGIC_CODE:
    set x, 15
 PIO_SWD_RESET_SHIFT_MAGIC_CODE:
-   out PINS, 1 side SET_PIN_SWCLK_LOW [1]
-   jmp x-- PIO_SWD_RESET_SHIFT_MAGIC_CODE side SET_PIN_SWCLK_HIGH [1]
+   out PINS, 1                             side SET_PIN_SWCLK_LOW  [1]
+   jmp x-- PIO_SWD_RESET_SHIFT_MAGIC_CODE  side SET_PIN_SWCLK_HIGH [1]
    jmp PIO_SWD_RESET_CONTINUE
 
 .wrap

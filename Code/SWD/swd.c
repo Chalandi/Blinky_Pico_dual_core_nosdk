@@ -107,8 +107,8 @@ void swd_init(void)
   /* enable the SM0 */
   PIO1->CTRL.bit.SM_ENABLE = 1;
 
-  /* perform the SWD reset sequence  (JTAG-to-SWD) */
-  PIO1->TXF0 = 0xe79e; /* init */
+  /* perform the SWD reset sequence (JTAG-to-SWD) */
+  PIO1->TXF0 = 0xe79e;
   PIO1->TXF0 = 0xA5;
   while(PIO1->FSTAT.bit.TXFULL);
 
@@ -126,37 +126,10 @@ void swd_init(void)
   {
     ((uint32*)&(PIO1->INSTR_MEM0.reg))[i] = (uint32)pio_swd_cmd_program_instructions[i];
   }
-  
-  /* configure the swd clock to 4MHz */
-  swd_SetClock(1);
-
-  /* enable side-set opt */
-  PIO1->SM0_EXECCTRL.bit.SIDE_EN = 1;
-
-  /* configure pins */
-  PIO1->SM0_PINCTRL.reg = 0;
-  PIO1->SM0_PINCTRL.bit.SIDESET_BASE  = 14;
-  PIO1->SM0_PINCTRL.bit.SIDESET_COUNT = 2; // Physical side-set pins (+ 1 if side-set opt is used)
-  
-  PIO1->SM0_PINCTRL.bit.OUT_BASE      = 15;
-  PIO1->SM0_PINCTRL.bit.OUT_COUNT     = 1;
-
-  PIO1->SM0_PINCTRL.bit.SET_BASE      = 14;
-  PIO1->SM0_PINCTRL.bit.SET_COUNT     = 2;
-
-  PIO1->SM0_PINCTRL.bit.IN_BASE       = 15;
 
   /* configure wrap */
   PIO1->SM0_EXECCTRL.bit.WRAP_TOP    = pio_swd_cmd_wrap;
   PIO1->SM0_EXECCTRL.bit.WRAP_BOTTOM = pio_swd_cmd_wrap_target;
-
-  /* configure the shift reg */
-  PIO1->SM0_SHIFTCTRL.reg = 0;
-  PIO1->SM0_SHIFTCTRL.bit.IN_SHIFTDIR  = 1;
-  PIO1->SM0_SHIFTCTRL.bit.OUT_SHIFTDIR = 1;
-
-  /* enable the PIO1 interrupt */
-  PIO1->IRQ0_INTE.bit.SM0_RXNEMPTY = 1;
 
   /* enable the SM0 */
   PIO1->CTRL.bit.SM_ENABLE = 1;

@@ -29,4 +29,44 @@ void UsbInit(void);
 #define DATA0_PID      0u
 #define DATA1_PID      1u
 
+/* SETUP Packet - Standard requests */
+#define USB_REQ_GET_STATUS         0u
+#define USB_REQ_CLEAR_FEATURE      1u
+#define USB_REQ_SET_FEATURE        3u
+#define USB_REQ_SET_ADDRESS        5u
+#define USB_REQ_GET_DESCRIPTOR     6u
+#define USB_REQ_SET_DESCRIPTOR     7u
+#define USB_REQ_GET_CONFIGURATION  8u
+#define USB_REQ_SET_CONFIGURATION  9u
+#define USB_REQ_GET_INTERFACE     10u
+#define USB_REQ_SET_INTERFACE     11u
+#define USB_REQ_SYNCH_FRAME       12u
+
+#define USB_REQ_DIR_DEVICE_TO_HOST  (1ul << 7)
+#define USB_REQ_DIR_HOST_TO_DEVICE  (0ul << 7)
+
+#define USB_REQ_RECIPIENT_DEVICE         0u
+#define USB_REQ_RECIPIENT_INTERFACE      1u
+#define USB_REQ_RECIPIENT_ENDPOINT       2u
+
+/* Descriptor Types */
+#define USB_DESCRIPTOR_TYPE_DEVICE                     1u
+#define USB_DESCRIPTOR_TYPE_CONFIGURATION              2u
+#define USB_DESCRIPTOR_TYPE_STRING                     3u
+#define USB_DESCRIPTOR_TYPE_INTERFACE                  4u
+#define USB_DESCRIPTOR_TYPE_ENDPOINT                   5u
+#define USB_DESCRIPTOR_TYPE_DEVICE_QUALIFIER           6u
+#define USB_DESCRIPTOR_TYPE_OTHER_SPEED_CONFIGURATION  7u
+#define USB_DESCRIPTOR_TYPE_INTERFACE_POWER            8u
+
+
+
+
+
+
+
+
+
+
+
 #endif

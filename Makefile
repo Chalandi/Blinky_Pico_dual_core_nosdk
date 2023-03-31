@@ -175,6 +175,7 @@ SRC_FILES := $(SRC_DIR)/Appli/main.c                      \
              $(SRC_DIR)/Mcal/Clock/Clock.c                \
              $(SRC_DIR)/Mcal/Cpu/Cpu.c                    \
              $(SRC_DIR)/Mcal/SysTickTimer/SysTickTimer.c  \
+             $(SRC_DIR)/Mcal/USB/USB.c                    \
              $(SRC_DIR)/JTAG/jtag.c                       \
              $(SRC_DIR)/Startup/IntVect.c                 \
              $(SRC_DIR)/Startup/SecondaryBoot.c           \
@@ -198,6 +199,7 @@ INC_FILES := $(SRC_DIR)                    \
              $(SRC_DIR)/Mcal/Cpu           \
              $(SRC_DIR)/Mcal/Gpio          \
              $(SRC_DIR)/Mcal/SysTickTimer  \
+             $(SRC_DIR)/Mcal/USB           \
              $(SRC_DIR)/JTAG               \
              $(SRC_DIR)/Startup            \
              $(SRC_DIR)/Std                \

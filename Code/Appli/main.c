@@ -24,6 +24,7 @@
 #include "SysTickTimer.h"
 #include "jtag.h"
 #include "swd.h"
+#include "USB.h"
 
 //=============================================================================
 // Macros
@@ -134,6 +135,8 @@ void main_Core1(void)
   /* discover the JTAG TAPs */
   x = jtag_transfer((uint64)-1, 64,(uint32)-1, 32);
 
+  /* init usb */
+  UsbInit();
 
   while(1)
   {

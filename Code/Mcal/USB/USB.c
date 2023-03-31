@@ -1,6 +1,8 @@
 
 #include "RP2040.h"
 #include "USB.h"
+#include "usb_hwreg.h"
+#include "usb_types.h"
 
 volatile unsigned long long _EP0_[100] = {0};
 volatile unsigned int _EP0_index = 0;
@@ -12,8 +14,12 @@ volatile unsigned int UsbReceived_EP0_IN_count = 0;
 
 volatile unsigned int UsbNotSupportedRequestCount = 0;
 
+static boolean Usb_SendDataToHost(uint8 endpoint, uint8 pid, uint8* buffer, uint8 size);
+static boolean Usb_PrepareOutBufForReceiveDataFromHost(uint8 endpoint, uint8 pid, uint8 size);
+
 void USBCTRL_IRQ(void)
 {
+
   if(USBCTRL_REGS->INTS.bit.SETUP_REQ)
   {
     //clear the interrupt
@@ -21,11 +27,13 @@ void USBCTRL_IRQ(void)
     __asm("DSB");
 
     //check the received request in the SETUP Packet
-    if(USBCTRL_DPRAM->SETUP_PACKET_LOW.bit.BMREQUESTTYPE == 0x80U &&
-       USBCTRL_DPRAM->SETUP_PACKET_LOW.bit.BREQUEST      == 0x06U
+    const tUsbSetupPacket* const  UsbSetupPacket = (const tUsbSetupPacket* const)USBCTRL_DPRAM_BASE;
+    
+    if(UsbSetupPacket->bmRequestType == 0x80U &&
+       UsbSetupPacket->bRequest      == 0x06U
        )
     {
-      if(USBCTRL_DPRAM->SETUP_PACKET_LOW.bit.WVALUE == 0x0100)
+      if(UsbSetupPacket->wValue == 0x0100)
       {
           /* send the device descriptor */
           const unsigned char device_dsc[0x12] = {
@@ -36,7 +44,7 @@ void USBCTRL_IRQ(void)
                                                    0x00,      // bDeviceSubClass
                                                    0x00,      // bDeviceProtocol
                                                    64,        // bMaxPacketSize0
-                                                   0x8a,0x2e, // idVendor
+                                                   0x09,0x12, // idVendor
                                                    0x01,0x00, // idProduct
                                                    0x00,0x00, // bcdDevice
                                                    0x00,      // iManufacturer
@@ -44,18 +52,9 @@ void USBCTRL_IRQ(void)
                                                    0x00,      // iSerialNumber
                                                    0x01       // bNumConfigurations
                                                  };
-           for(int i =0; i < 0x12; i++)
-           {
-             ((volatile unsigned char*)(USBCTRL_DPRAM_BASE+0x100UL))[i] = device_dsc[i];
-           }
-          
-           USBCTRL_DPRAM->EP0_IN_BUFFER_CONTROL.reg = 0;
-           USBCTRL_DPRAM->EP0_IN_BUFFER_CONTROL.bit.LENGTH_0    = 0x12u;
-           USBCTRL_DPRAM->EP0_IN_BUFFER_CONTROL.bit.AVAILABLE_0 = 1U;
-           USBCTRL_DPRAM->EP0_IN_BUFFER_CONTROL.bit.PID_0       = 1U;
-           USBCTRL_DPRAM->EP0_IN_BUFFER_CONTROL.bit.FULL_0      = 1U;
+          Usb_SendDataToHost(EP0, DATA1_PID, (uint8*)device_dsc, sizeof(device_dsc));
        }
-       else if(USBCTRL_DPRAM->SETUP_PACKET_LOW.bit.WVALUE == 0x0200)
+       else if(UsbSetupPacket->wValue == 0x0200)
        {
          /* send configuration descriptor */
          const unsigned char configuration_dsc[9]={
@@ -69,40 +68,24 @@ void USBCTRL_IRQ(void)
                                                     0x80,                   // bmAttributes        - Self/bus power and remote wakeup settings (Self powered 0xC0,  0x80 bus powered)
                                                     50                      // bMaxPower           - Bus power required in units of 2 mA
                                                   };
-           for(int i =0; i < 9; i++)
-           {
-             ((volatile unsigned char*)(USBCTRL_DPRAM_BASE+0x100UL))[i] = configuration_dsc[i];
-           }
-          
-           USBCTRL_DPRAM->EP0_IN_BUFFER_CONTROL.reg = 0;
-           USBCTRL_DPRAM->EP0_IN_BUFFER_CONTROL.bit.LENGTH_0    = 0x9u;
-           USBCTRL_DPRAM->EP0_IN_BUFFER_CONTROL.bit.AVAILABLE_0 = 1U;
-           USBCTRL_DPRAM->EP0_IN_BUFFER_CONTROL.bit.PID_0       = 1U;
-           USBCTRL_DPRAM->EP0_IN_BUFFER_CONTROL.bit.FULL_0      = 1U;
-       
+         Usb_SendDataToHost(EP0, DATA1_PID, (uint8*)configuration_dsc, sizeof(configuration_dsc));
        }
        else
        {
        }
 
     }
-    else if(USBCTRL_DPRAM->SETUP_PACKET_LOW.bit.BMREQUESTTYPE == 0U &&
-            USBCTRL_DPRAM->SETUP_PACKET_LOW.bit.BREQUEST      == 0x05U)
+    else if(UsbSetupPacket->bmRequestType == 0U &&
+            UsbSetupPacket->bRequest      == 0x05U
+           )
     {
-      UsbDeviceAddress = USBCTRL_DPRAM->SETUP_PACKET_LOW.bit.WVALUE;
-
-       USBCTRL_DPRAM->EP0_IN_BUFFER_CONTROL.reg = 0;
-       USBCTRL_DPRAM->EP0_IN_BUFFER_CONTROL.bit.LENGTH_0    = 0u;
-       USBCTRL_DPRAM->EP0_IN_BUFFER_CONTROL.bit.AVAILABLE_0 = 1U;
-       USBCTRL_DPRAM->EP0_IN_BUFFER_CONTROL.bit.PID_0       = 1U;
-       USBCTRL_DPRAM->EP0_IN_BUFFER_CONTROL.bit.FULL_0      = 1U;
+      UsbDeviceAddress = UsbSetupPacket->wValue;
+      Usb_SendDataToHost(EP0, DATA1_PID, NULL, 0);
     }
     else
     {
       UsbNotSupportedRequestCount++;
     }
-
-
 
     //save the data
     _EP0_[_EP0_index++] = *(volatile unsigned long long*)(USBCTRL_DPRAM_BASE);
@@ -146,11 +129,7 @@ void USBCTRL_IRQ(void)
       }
 
       /* configure the expected OUT packet */
-       USBCTRL_DPRAM->EP0_OUT_BUFFER_CONTROL.reg = 0;
-       USBCTRL_DPRAM->EP0_OUT_BUFFER_CONTROL.bit.LENGTH_0    = 0u;
-       USBCTRL_DPRAM->EP0_OUT_BUFFER_CONTROL.bit.AVAILABLE_0 = 1U;
-       USBCTRL_DPRAM->EP0_OUT_BUFFER_CONTROL.bit.PID_0       = 1U;
-       USBCTRL_DPRAM->EP0_OUT_BUFFER_CONTROL.bit.FULL_0      = 0U;
+      Usb_PrepareOutBufForReceiveDataFromHost(EP0, DATA1_PID, 0);
     }
   }
 
@@ -222,4 +201,52 @@ void UsbInit(void)
     //while(__DEBUG_HALT__);
     USBCTRL_REGS->SIE_CTRL.bit.PULLUP_EN      = 1U;
 
+}
+
+static boolean Usb_SendDataToHost(uint8 endpoint, uint8 pid, uint8* buffer, uint8 size)
+{
+  boolean status = FALSE;
+
+  EPx_BUFFER_CONTROL* epx_in_buffer_control = (EPx_BUFFER_CONTROL*)(USBCTRL_DPRAM_BASE + EPx_IN_BUFFER_CONTROL_OFFSET + (endpoint * 8ul));
+
+  if((size < 65u) && (endpoint < 16u) && (pid < 2u))
+  {
+    if(buffer != NULL)
+    {
+      for(uint8 i = 0; i < size; i++)
+      {
+        ((volatile uint8*)(USBCTRL_DPRAM_BASE + 0x100ul + (endpoint * 0x80ul)))[i] = buffer[i];
+      }
+    }
+
+    epx_in_buffer_control->reg             = 0;
+    epx_in_buffer_control->bit.LENGTH_0    = size;
+    epx_in_buffer_control->bit.AVAILABLE_0 = 1U;
+    epx_in_buffer_control->bit.PID_0       = (pid == 0 ? 0 : 1);
+    epx_in_buffer_control->bit.FULL_0      = 1U;
+
+    status = TRUE;
+  }
+
+  return(status);
+}
+
+static boolean Usb_PrepareOutBufForReceiveDataFromHost(uint8 endpoint, uint8 pid, uint8 size)
+{
+  boolean status = FALSE;
+
+  EPx_BUFFER_CONTROL* epx_out_buffer_control = (EPx_BUFFER_CONTROL*)(USBCTRL_DPRAM_BASE + EPx_OUT_BUFFER_CONTROL_OFFSET + (endpoint * 8ul));
+  
+  if((size < 65u) && (endpoint < 16u) && (pid < 2u))
+  {
+    /* configure the expected OUT packet */
+    epx_out_buffer_control->reg             = 0;
+    epx_out_buffer_control->bit.LENGTH_0    = size;
+    epx_out_buffer_control->bit.AVAILABLE_0 = 1U;
+    epx_out_buffer_control->bit.PID_0       = (pid == 0 ? 0 : 1);
+    epx_out_buffer_control->bit.FULL_0      = 0U;
+    status = TRUE;
+  }
+
+  return(status);
 }

@@ -186,6 +186,16 @@ void UsbInit(void)
     NVIC_EnableIRQ(USBCTRL_IRQ_IRQn);
     __enable_irq();
 
+    /* enable endpoint 1 */
+    USBCTRL_DPRAM->EP1_IN_CONTROL.reg                = 0;
+    USBCTRL_DPRAM->EP1_IN_CONTROL.bit.ENDPOINT_TYPE  = 3;
+    USBCTRL_DPRAM->EP1_IN_CONTROL.bit.BUFFER_ADDRESS = (USBCTRL_DPRAM_BASE + 0x100ul + (1 * 0x80ul)) >> 6;
+    USBCTRL_DPRAM->EP1_IN_CONTROL.bit.ENABLE         = 1u;
+
+    USBCTRL_DPRAM->EP1_OUT_CONTROL.reg                = 0;
+    USBCTRL_DPRAM->EP1_OUT_CONTROL.bit.ENDPOINT_TYPE  = 3;
+    USBCTRL_DPRAM->EP1_OUT_CONTROL.bit.BUFFER_ADDRESS = (USBCTRL_DPRAM_BASE + 0x100ul + (1 * 0x80ul)) >> 6;
+    USBCTRL_DPRAM->EP1_OUT_CONTROL.bit.ENABLE         = 1u;
 
     //while(__DEBUG_HALT__);
     USBCTRL_REGS->SIE_CTRL.bit.PULLUP_EN      = 1U;
@@ -375,9 +385,9 @@ static void UsbDriver_Req_get_descriptor(const tUsbSetupPacket* const pUsbSetupP
                                                 0x8a,0x2e, // idVendor
                                                 0x0a,0x00, // idProduct
                                                 0x01,0x00, // bcdDevice
-                                                0x00,      // iManufacturer
-                                                0x00,      // iProduct
-                                                0x00,      // iSerialNumber
+                                                0x01,      // iManufacturer
+                                                0x02,      // iProduct
+                                                0x03,      // iSerialNumber
                                                 0x01       // bNumConfigurations
                                               };
       UsbDriver_SendDataToHost(EP0, DATA1_PID, (uint8*)device_dsc, sizeof(device_dsc));
@@ -422,7 +432,7 @@ static void UsbDriver_Req_get_descriptor(const tUsbSetupPacket* const pUsbSetupP
                                                  1 | 0x80,               // bEndpointAddress - Endpoint number and direction
                                                  0x03,                   // bmAttributes - Transfer type and supplementary information    
                                                  0x40,0x00,              // wMaxPacketSize - Maximum packet size supported
-                                                 1,                      // bInterval - Service interval or NAK rate
+                                                 255,                    // bInterval - Service interval or NAK rate
                                              
                                                  // Endpoint Descriptor
                                                  0x07,                   // bLength - Descriptor size in bytes (07h)
@@ -430,22 +440,83 @@ static void UsbDriver_Req_get_descriptor(const tUsbSetupPacket* const pUsbSetupP
                                                  1,                      // bEndpointAddress - Endpoint number and direction
                                                  0x03,                   // bmAttributes - Transfer type and supplementary information
                                                  0x40,0x00,              // wMaxPacketSize - Maximum packet size supported
-                                                 1                       // bInterval - Service interval or NAK rate
+                                                 255                     // bInterval - Service interval or NAK rate
                                              };
+
+      /* check the configuration size requested by the host 
+         note: we must send exactly the requested size otherwise the host will abort the enumeration process */
       const uint8 size = (uint8)(pUsbSetupPacket->wLength) > sizeof(configuration_dsc) ? sizeof(configuration_dsc) : (uint8)(pUsbSetupPacket->wLength);
 
+      /* send the configuration to the host */
       UsbDriver_SendDataToHost(EP0, DATA1_PID, (uint8*)configuration_dsc, (uint8)size);
+    }
+    else if(USB_DESCRIPTOR_TYPE_HID_REPORT == DescriptorType)
+    {
+      const uint8 hid_rpt_desc[] =
+        {
+            0x06, 0x00, 0xFF,       // Usage Page = 0xFF00 (Vendor Defined Page 1)
+            0x09, 0x01,             // Usage (Vendor Usage 1)
+            0xA1, 0x01,             // Collection (Application)
+            // Input report
+            0x19, 0x01,             // Usage Minimum
+            0x29, 0x40,             // Usage Maximum
+            0x15, 0x00,             // Logical Minimum (data bytes in the report may have minimum value = 0x00)
+            0x26, 0xFF, 0x00,       // Logical Maximum (data bytes in the report may have maximum value = 0x00FF = unsigned 255)
+            0x75, 0x08,             // Report Size: 8-bit field size
+            0x95, 64,               // Report Count
+            0x81, 0x02,             // Input (Data, Array, Abs)
+            // Output report
+            0x19, 0x01,             // Usage Minimum
+            0x29, 0x40,             // Usage Maximum
+            0x75, 0x08,             // Report Size: 8-bit field size
+            0x95, 64,               // Report Count
+            0x91, 0x02,             // Output (Data, Array, Abs)
+            0xC0                    // End Collection
+        };
+
+         UsbDriver_SendDataToHost(EP0, DATA1_PID, (uint8*)hid_rpt_desc, sizeof(hid_rpt_desc));
+
     }
     else if(USB_DESCRIPTOR_TYPE_DEVICE_QUALIFIER == DescriptorType)
     {
-      /* for all none supported descriptor we send STALL status to the host */
+      /* As DEVICE_QUALIFIER is used only for high speed we will not support it on RP2040 (has only a full speed device controller) */
       UsbDriver_SendStallToHost(EP0, DATA1_PID);
+    }
+    else if(USB_DESCRIPTOR_TYPE_STRING == DescriptorType)
+    {
+      const tUsbStringDescriptor UsbStringDescriptor = {4, 0x03, {0x0409}};
+      const tUsbSubsequentStringDescriptor UsbSubsequentStringDescriptor_0 = {30, 0x03, {'C','H','A','L','A','N','D','I',' ','A','M','I','N','E'}};              /* Manufacturer string descriptor */
+      const tUsbSubsequentStringDescriptor UsbSubsequentStringDescriptor_1 = {36, 0x03, {'C','H','A','L','A','N','D','I',' ','D','E','B','U','G','G','E','R'}};  /* Product string descriptor */
+      const tUsbSubsequentStringDescriptor UsbSubsequentStringDescriptor_2 = {10, 0x03, {'2','0','2','3'}};                                                      /* SerialNumber */
+     
+      const uint8 StrIdx = (uint8)pUsbSetupPacket->wValue;
+
+      if(StrIdx == 0u)
+      {
+        UsbDriver_SendDataToHost(EP0, DATA1_PID, (uint8*)&UsbStringDescriptor,UsbStringDescriptor.bLength);
+      }
+      else if(StrIdx == 1u)
+      {
+        UsbDriver_SendDataToHost(EP0, DATA1_PID, (uint8*)&UsbSubsequentStringDescriptor_0, UsbSubsequentStringDescriptor_0.bLength);
+      }
+      else if(StrIdx == 2u)
+      {
+        UsbDriver_SendDataToHost(EP0, DATA1_PID, (uint8*)&UsbSubsequentStringDescriptor_1, UsbSubsequentStringDescriptor_1.bLength);
+      }
+      else if(StrIdx == 3u)
+      {
+        UsbDriver_SendDataToHost(EP0, DATA1_PID, (uint8*)&UsbSubsequentStringDescriptor_2, UsbSubsequentStringDescriptor_2.bLength);
+      }
+      else
+      {
+        //for(;;);
+        UsbDriver_SendStallToHost(EP0, DATA1_PID);
+      }
     }
     else
     {
 
     }
-
 }
 
 //-----------------------------------------------------------------------------------------

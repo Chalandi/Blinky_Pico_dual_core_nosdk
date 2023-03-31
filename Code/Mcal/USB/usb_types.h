@@ -106,7 +106,7 @@ typedef struct
 // String Descriptors
 //------------------------------------------------------------------------------------------------------------------
 #define USB_NUMBER_OF_SUPPORTED_LANGUAGE  1U
-#define USB_MAX_STRING_LENGTH             10U
+#define USB_MAX_STRING_LENGTH             50U
 
 typedef struct
 {
@@ -120,7 +120,7 @@ typedef struct
 {
   uint8  bLength;                         //Size of Descriptor in Bytes
   uint8  bDescriptorType;                 //String Descriptor (0x03)
-  uint8  bString[USB_MAX_STRING_LENGTH];  //Unicode Encoded String
+  uint16 bString[USB_MAX_STRING_LENGTH];  //Unicode Encoded String
 }tUsbSubsequentStringDescriptor;
 
 #endif

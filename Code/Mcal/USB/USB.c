@@ -12,6 +12,10 @@ volatile unsigned int UsbDeviceAddress = 0;
 volatile unsigned int UsbReceived_EP0_OUT_count = 0;
 volatile unsigned int UsbReceived_EP0_IN_count = 0;
 
+volatile unsigned int UsbReceived_EP1_IN_count = 0;
+volatile unsigned int UsbReceived_EP1_OUT_count = 0;
+volatile uint8 EP1_dataPid = DATA0_PID;
+
 volatile unsigned int UsbNotSupportedRequestCount = 0;
 
 static void UsbDriver_HandleSetupPacket(const tUsbSetupPacket* const pUsbSetupPacket);
@@ -64,7 +68,7 @@ void USBCTRL_IRQ(void)
   if(USBCTRL_REGS->INTS.bit.SETUP_REQ)
   {
     /* clear the interrupt */
-    USBCTRL_REGS->SIE_STATUS.bit.SETUP_REC = 1U;
+    USBCTRL_REGS->SIE_STATUS.bit.SETUP_REC = 1u;
 
     /* get the SETUP packet data */
     const tUsbSetupPacket* const UsbSetupPacket = (const tUsbSetupPacket* const)USBCTRL_DPRAM_BASE;
@@ -116,6 +120,44 @@ void USBCTRL_IRQ(void)
       /* configure the expected OUT packet */
       UsbDriver_PrepareOutBufForReceiveDataFromHost(EP0, DATA1_PID, 0);
     }
+    if(USBCTRL_REGS->BUFF_STATUS.bit.EP1_OUT)
+    {
+        UsbReceived_EP1_OUT_count++;
+
+       /* clear the EP0_OUT buffer status */
+       USBCTRL_REGS->BUFF_STATUS.bit.EP1_OUT = 1;
+
+       EP1_dataPid ^= 1u;
+       UsbDriver_PrepareOutBufForReceiveDataFromHost(EP1, EP1_dataPid, 64u);
+    }
+    if(USBCTRL_REGS->BUFF_STATUS.bit.EP1_IN)
+    {
+        UsbReceived_EP1_IN_count++;
+
+       /* clear the EP0_IN buffer status */
+       USBCTRL_REGS->BUFF_STATUS.bit.EP1_IN = 1;
+
+       /* update the EP1_OUT buffer config with the new expect data pid */
+       EP1_dataPid ^= 1u;
+       UsbDriver_PrepareOutBufForReceiveDataFromHost(EP1, EP1_dataPid, 64u);
+    }
+  }
+
+  /* handle EP's NAK and STALL notification */
+  if(USBCTRL_REGS->INTS.bit.EP_STALL_NAK)
+  {
+    if(USBCTRL_REGS->EP_STATUS_STALL_NAK.bit.EP1_IN)
+    {
+      /* NAK token was sent by the device controller as response for IN token from host. 
+         this means that the host is requesting a DATA packet on EP1_IN
+      */
+       /* clear the EP1_IN NAK interrupt flag */
+       USBCTRL_REGS->EP_STATUS_STALL_NAK.bit.EP1_IN = 1u;
+
+       /* send back the last received data from the host (echo test) */
+       uint8* const pBuffer_EP1 = (uint8*)((uint32)(USBCTRL_DPRAM_BASE + 0x100u + (EP1 * 0x80u)));
+       UsbDriver_SendDataToHost(EP1, EP1_dataPid, pBuffer_EP1, 4u);
+    }
   }
 }
 
@@ -129,21 +171,21 @@ void USBCTRL_IRQ(void)
 void UsbInit(void)
 {
    //release the reset of PLL_USB
-   RESETS->RESET.bit.pll_usb = 0U;
+   RESETS->RESET.bit.pll_usb = 0u;
    while(RESETS->RESET_DONE.bit.pll_usb != 1);
 
    //configure the PLL_USB
-   PLL_USB->CS.bit.REFDIV           = 1U;
+   PLL_USB->CS.bit.REFDIV           = 1u;
    PLL_USB->FBDIV_INT.bit.FBDIV_INT = 40U;
    PLL_USB->PRIM.bit.POSTDIV1       = 5U;
    PLL_USB->PRIM.bit.POSTDIV2       = 2U;
 
-   PLL_USB->PWR.bit.PD        = 0U;
-   PLL_USB->PWR.bit.VCOPD     = 0U;
+   PLL_USB->PWR.bit.PD        = 0u;
+   PLL_USB->PWR.bit.VCOPD     = 0u;
 
-   while(PLL_USB->CS.bit.LOCK != 1U);
+   while(PLL_USB->CS.bit.LOCK != 1u);
 
-   PLL_USB->PWR.bit.POSTDIVPD = 0U;
+   PLL_USB->PWR.bit.POSTDIVPD = 0u;
 
    // switch the system clock to use the PLL
    CLOCKS->CLK_SYS_CTRL.bit.AUXSRC = CLOCKS_CLK_SYS_CTRL_AUXSRC_clksrc_pll_sys;
@@ -151,12 +193,12 @@ void UsbInit(void)
 
    //switch on the USB clock
    CLOCKS->CLK_USB_CTRL.bit.AUXSRC = CLOCKS_CLK_USB_CTRL_AUXSRC_clksrc_pll_usb;
-   CLOCKS->CLK_USB_CTRL.bit.ENABLE = 1U;
+   CLOCKS->CLK_USB_CTRL.bit.ENABLE = 1u;
 
    // switch off the ROSC clock
 
    //release reset of usb
-    RESETS->RESET.bit.usbctrl = 0U;
+    RESETS->RESET.bit.usbctrl = 0u;
     while(RESETS->RESET_DONE.bit.usbctrl != 1);
 
     //clear the DPRAM
@@ -166,39 +208,46 @@ void UsbInit(void)
     }
 
     //enable USB
-    USBCTRL_REGS->USB_MUXING.bit.TO_PHY       = 1U;
-    USBCTRL_REGS->USB_MUXING.bit.SOFTCON      = 0U;
-    USBCTRL_REGS->MAIN_CTRL.bit.HOST_NDEVICE  = 0U;
+    USBCTRL_REGS->USB_MUXING.bit.TO_PHY       = 1u;
+    USBCTRL_REGS->USB_MUXING.bit.SOFTCON      = 0u;
+    USBCTRL_REGS->MAIN_CTRL.bit.HOST_NDEVICE  = 0u;
 
-    USBCTRL_REGS->USB_PWR.bit.VBUS_DETECT = 1U;
-    USBCTRL_REGS->USB_PWR.bit.VBUS_DETECT_OVERRIDE_EN = 1U;
+    USBCTRL_REGS->USB_PWR.bit.VBUS_DETECT = 1u;
+    USBCTRL_REGS->USB_PWR.bit.VBUS_DETECT_OVERRIDE_EN = 1u;
 
-    USBCTRL_REGS->MAIN_CTRL.bit.CONTROLLER_EN = 1U;
+    USBCTRL_REGS->MAIN_CTRL.bit.CONTROLLER_EN = 1u;
 
-    USBCTRL_REGS->SIE_CTRL.bit.EP0_INT_1BUF   = 1U;
+    USBCTRL_REGS->SIE_CTRL.bit.EP0_INT_1BUF   = 1u;
 
     //enable usb interrupt
-    USBCTRL_REGS->INTE.bit.BUFF_STATUS = 1U; // note: this interrupt is needed to detect OUT and IN requests send by the host.
-    USBCTRL_REGS->INTE.bit.BUS_RESET   = 1U; // note: this interrupt is needed to detect a reset state on the USB bus.
-    USBCTRL_REGS->INTE.bit.SETUP_REQ   = 1U; // note: this interrupt is needed to notify about a received SETUP packet.
+    USBCTRL_REGS->INTE.bit.BUFF_STATUS  = 1u; // note: this interrupt is needed to detect OUT and IN requests send by the host.
+    USBCTRL_REGS->INTE.bit.BUS_RESET    = 1u; // note: this interrupt is needed to detect a reset state on the USB bus.
+    USBCTRL_REGS->INTE.bit.SETUP_REQ    = 1u; // note: this interrupt is needed to notify the CPU about a received SETUP packet.
+    USBCTRL_REGS->INTE.bit.EP_STALL_NAK = 1u; // note: this interrupt is needed to notify the CPU about a sent/received NAK/STALL packet.
 
     //enable NVIC
     NVIC_EnableIRQ(USBCTRL_IRQ_IRQn);
     __enable_irq();
 
     /* enable endpoint 1 */
-    USBCTRL_DPRAM->EP1_IN_CONTROL.reg                = 0;
-    USBCTRL_DPRAM->EP1_IN_CONTROL.bit.ENDPOINT_TYPE  = 3;
-    USBCTRL_DPRAM->EP1_IN_CONTROL.bit.BUFFER_ADDRESS = (USBCTRL_DPRAM_BASE + 0x100ul + (1 * 0x80ul)) >> 6;
-    USBCTRL_DPRAM->EP1_IN_CONTROL.bit.ENABLE         = 1u;
+    USBCTRL_DPRAM->EP1_IN_CONTROL.reg                    = 0;
+    USBCTRL_DPRAM->EP1_IN_CONTROL.bit.INTERRUPT_PER_BUFF = 1u;
+    USBCTRL_DPRAM->EP1_IN_CONTROL.bit.INTERRUPT_ON_NAK   = 1u;
+    USBCTRL_DPRAM->EP1_IN_CONTROL.bit.INTERRUPT_ON_STALL = 1u;
+    USBCTRL_DPRAM->EP1_IN_CONTROL.bit.ENDPOINT_TYPE      = 2u;
+    USBCTRL_DPRAM->EP1_IN_CONTROL.bit.BUFFER_ADDRESS     = (uint16)(0x100u + (EP1 * 0x80u));
+    USBCTRL_DPRAM->EP1_IN_CONTROL.bit.ENABLE             = 1u;
 
-    USBCTRL_DPRAM->EP1_OUT_CONTROL.reg                = 0;
-    USBCTRL_DPRAM->EP1_OUT_CONTROL.bit.ENDPOINT_TYPE  = 3;
-    USBCTRL_DPRAM->EP1_OUT_CONTROL.bit.BUFFER_ADDRESS = (USBCTRL_DPRAM_BASE + 0x100ul + (1 * 0x80ul)) >> 6;
-    USBCTRL_DPRAM->EP1_OUT_CONTROL.bit.ENABLE         = 1u;
+    USBCTRL_DPRAM->EP1_OUT_CONTROL.reg                    = 0u;
+    USBCTRL_DPRAM->EP1_OUT_CONTROL.bit.INTERRUPT_PER_BUFF = 1u;
+    USBCTRL_DPRAM->EP1_OUT_CONTROL.bit.ENDPOINT_TYPE      = 2u;
+    USBCTRL_DPRAM->EP1_OUT_CONTROL.bit.BUFFER_ADDRESS     = (uint16)(0x100u + (EP1 * 0x80u));
+    USBCTRL_DPRAM->EP1_OUT_CONTROL.bit.ENABLE             = 1u;
+
+    UsbDriver_PrepareOutBufForReceiveDataFromHost(EP1, EP1_dataPid, 64u);
 
     //while(__DEBUG_HALT__);
-    USBCTRL_REGS->SIE_CTRL.bit.PULLUP_EN      = 1U;
+    USBCTRL_REGS->SIE_CTRL.bit.PULLUP_EN      = 1u;
 
 }
 
@@ -227,9 +276,9 @@ static boolean UsbDriver_SendDataToHost(uint8 endpoint, uint8 pid, uint8* buffer
 
     epx_in_buffer_control->reg             = 0;
     epx_in_buffer_control->bit.LENGTH_0    = size;
-    epx_in_buffer_control->bit.AVAILABLE_0 = 1U;
+    epx_in_buffer_control->bit.AVAILABLE_0 = 1u;
     epx_in_buffer_control->bit.PID_0       = (pid == 0 ? 0 : 1);
-    epx_in_buffer_control->bit.FULL_0      = 1U;
+    epx_in_buffer_control->bit.FULL_0      = 1u;
 
     status = TRUE;
   }
@@ -254,15 +303,15 @@ static boolean UsbDriver_SendStallToHost(uint8 endpoint, uint8 pid)
   {
     epx_in_buffer_control->reg             = 0;
     epx_in_buffer_control->bit.LENGTH_0    = 0;
-    epx_in_buffer_control->bit.AVAILABLE_0 = 1U;
+    epx_in_buffer_control->bit.AVAILABLE_0 = 1u;
     epx_in_buffer_control->bit.PID_0       = (pid == 0 ? 0 : 1);
-    epx_in_buffer_control->bit.STALL       = 1U;
+    epx_in_buffer_control->bit.STALL       = 1u;
 
     if(endpoint == EP0)
     {
-      USBCTRL_REGS->EP_STALL_ARM.bit.EP0_IN  = 1U;
+      USBCTRL_REGS->EP_STALL_ARM.bit.EP0_IN  = 1u;
     }
-    epx_in_buffer_control->bit.FULL_0      = 1U;
+    epx_in_buffer_control->bit.FULL_0      = 1u;
 
     status = TRUE;
   }
@@ -287,9 +336,9 @@ static boolean UsbDriver_PrepareOutBufForReceiveDataFromHost(uint8 endpoint, uin
     /* configure the expected OUT packet */
     epx_out_buffer_control->reg             = 0;
     epx_out_buffer_control->bit.LENGTH_0    = size;
-    epx_out_buffer_control->bit.AVAILABLE_0 = 1U;
+    epx_out_buffer_control->bit.AVAILABLE_0 = 1u;
     epx_out_buffer_control->bit.PID_0       = (pid == 0 ? 0 : 1);
-    epx_out_buffer_control->bit.FULL_0      = 0U;
+    epx_out_buffer_control->bit.FULL_0      = 0u;
     status = TRUE;
   }
 
@@ -323,6 +372,7 @@ static void UsbDriver_HandleSetupPacket(const tUsbSetupPacket* const pUsbSetupPa
 //-----------------------------------------------------------------------------------------
 static void UsbDriver_Req_get_status(const tUsbSetupPacket* const pUsbSetupPacket)
 {
+  (void)pUsbSetupPacket;
 }
 
 //-----------------------------------------------------------------------------------------
@@ -334,6 +384,7 @@ static void UsbDriver_Req_get_status(const tUsbSetupPacket* const pUsbSetupPacke
 //-----------------------------------------------------------------------------------------
 static void UsbDriver_Req_clear_feature(const tUsbSetupPacket* const pUsbSetupPacket)
 {
+  (void)pUsbSetupPacket;
 }
 
 //-----------------------------------------------------------------------------------------
@@ -345,6 +396,7 @@ static void UsbDriver_Req_clear_feature(const tUsbSetupPacket* const pUsbSetupPa
 //-----------------------------------------------------------------------------------------
 static void UsbDriver_Req_set_feature(const tUsbSetupPacket* const pUsbSetupPacket)
 {
+  (void)pUsbSetupPacket;
 }
 
 //-----------------------------------------------------------------------------------------
@@ -377,7 +429,7 @@ static void UsbDriver_Req_get_descriptor(const tUsbSetupPacket* const pUsbSetupP
       const unsigned char device_dsc[0x12] = {
                                                 0x12,      // bLength
                                                 0x01,      // bDescriptorType
-                                                0x00,0x02, // bcdUSB
+                                                0x10,0x01, // bcdUSB
                                                 0x00,      // bDeviceClass
                                                 0x00,      // bDeviceSubClass
                                                 0x00,      // bDeviceProtocol
@@ -399,7 +451,7 @@ static void UsbDriver_Req_get_descriptor(const tUsbSetupPacket* const pUsbSetupP
                                                  // Configuration Descriptor
                                                  0x09,                   // bLength             - Descriptor size in bytes
                                                  0x02,                   // bDescriptorType     - The constant CONFIGURATION (02h)
-                                                 0x29,0x00,              // wTotalLength        - The number of bytes in the configuration descriptor and all of its subordinate descriptors
+                                                 0x20,0x00,              // wTotalLength        - The number of bytes in the configuration descriptor and all of its subordinate descriptors
                                                  1,                      // bNumInterfaces      - Number of interfaces in the configuration
                                                  1,                      // bConfigurationValue - Identifier for Set Configuration and Get Configuration requests
                                                  0,                      // iConfiguration      - Index of string descriptor for the configuration
@@ -412,33 +464,24 @@ static void UsbDriver_Req_get_descriptor(const tUsbSetupPacket* const pUsbSetupP
                                                  0,                      // bInterfaceNumber - Number identifying this interface
                                                  0,                      // bAlternateSetting - A number that identifies a descriptor with alternate settings for this bInterfaceNumber.
                                                  2,                      // bNumEndpoint - Number of endpoints supported not counting endpoint zero
-                                                 0x03,                   // bInterfaceClass - Class code
-                                                 0,                      // bInterfaceSubclass - Subclass code
-                                                 0,                      // bInterfaceProtocol - Protocol code
+                                                 0xff,                   // bInterfaceClass - Class code
+                                                 0xff,                   // bInterfaceSubclass - Subclass code
+                                                 0xff,                   // bInterfaceProtocol - Protocol code
                                                  0,                      // iInterface - Interface string index
-                                             
-                                                 // HID Class-Specific Descriptor
-                                                 0x09,                   // bLength - Descriptor size in bytes.
-                                                 0x21,                   // bDescriptorType - This descriptor's type: 21h to indicate the HID class.
-                                                 0x01,0x01,              // bcdHID - HID specification release number (BCD).
-                                                 0x00,                   // bCountryCode - Numeric expression identifying the country for localized hardware (BCD) or 00h.
-                                                 1,                      // bNumDescriptors - Number of subordinate report and physical descriptors.
-                                                 0x22,                   // bDescriptorType - The type of a class-specific descriptor that follows
-                                                 33,0x00,                // wDescriptorLength - Total length of the descriptor identified above.
-                                             
-                                                 // Endpoint Descriptor
+
+                                                 // Endpoint Descriptor (IN)
                                                  0x07,                   // bLength - Descriptor size in bytes (07h)
                                                  0x05,                   // bDescriptorType - The constant Endpoint (05h)
                                                  1 | 0x80,               // bEndpointAddress - Endpoint number and direction
-                                                 0x03,                   // bmAttributes - Transfer type and supplementary information    
+                                                 0x02,                   // bmAttributes - Transfer type and supplementary information
                                                  0x40,0x00,              // wMaxPacketSize - Maximum packet size supported
                                                  255,                    // bInterval - Service interval or NAK rate
                                              
-                                                 // Endpoint Descriptor
+                                                 // Endpoint Descriptor (OUT)
                                                  0x07,                   // bLength - Descriptor size in bytes (07h)
                                                  0x05,                   // bDescriptorType - The constant Endpoint (05h)
                                                  1,                      // bEndpointAddress - Endpoint number and direction
-                                                 0x03,                   // bmAttributes - Transfer type and supplementary information
+                                                 0x02,                   // bmAttributes - Transfer type and supplementary information
                                                  0x40,0x00,              // wMaxPacketSize - Maximum packet size supported
                                                  255                     // bInterval - Service interval or NAK rate
                                              };
@@ -528,6 +571,7 @@ static void UsbDriver_Req_get_descriptor(const tUsbSetupPacket* const pUsbSetupP
 //-----------------------------------------------------------------------------------------
 static void UsbDriver_Req_set_descriptor(const tUsbSetupPacket* const pUsbSetupPacket)
 {
+  (void)pUsbSetupPacket;
 }
 
 //-----------------------------------------------------------------------------------------
@@ -539,6 +583,10 @@ static void UsbDriver_Req_set_descriptor(const tUsbSetupPacket* const pUsbSetupP
 //-----------------------------------------------------------------------------------------
 static void UsbDriver_Req_get_configuration(const tUsbSetupPacket* const pUsbSetupPacket)
 {
+  /* as we have only one configuration just send one to the host */
+  (void)pUsbSetupPacket;
+  const uint8 config = 1;
+  UsbDriver_SendDataToHost(EP0, DATA1_PID, (uint8*)&config, 1);
 }
 
 //-----------------------------------------------------------------------------------------
@@ -551,6 +599,7 @@ static void UsbDriver_Req_get_configuration(const tUsbSetupPacket* const pUsbSet
 static void UsbDriver_Req_set_configuration(const tUsbSetupPacket* const pUsbSetupPacket)
 {
   /* as we have only one configuration just send ACK to the host */
+  (void)pUsbSetupPacket;
   UsbDriver_SendDataToHost(EP0, DATA1_PID, NULL, 0);
 }
 
@@ -563,6 +612,7 @@ static void UsbDriver_Req_set_configuration(const tUsbSetupPacket* const pUsbSet
 //-----------------------------------------------------------------------------------------
 static void UsbDriver_Req_get_interface(const tUsbSetupPacket* const pUsbSetupPacket)
 {
+  (void)pUsbSetupPacket;
 }
 
 //-----------------------------------------------------------------------------------------
@@ -574,6 +624,7 @@ static void UsbDriver_Req_get_interface(const tUsbSetupPacket* const pUsbSetupPa
 //-----------------------------------------------------------------------------------------
 static void UsbDriver_Req_set_interface(const tUsbSetupPacket* const pUsbSetupPacket)
 {
+  (void)pUsbSetupPacket;
 }
 
 //-----------------------------------------------------------------------------------------
@@ -585,6 +636,7 @@ static void UsbDriver_Req_set_interface(const tUsbSetupPacket* const pUsbSetupPa
 //-----------------------------------------------------------------------------------------
 static void UsbDriver_Req_synch_frame(const tUsbSetupPacket* const pUsbSetupPacket)
 {
+  (void)pUsbSetupPacket;
 }
 
 

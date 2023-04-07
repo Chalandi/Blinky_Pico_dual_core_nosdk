@@ -438,7 +438,7 @@ static void UsbDriver_Req_get_descriptor(const tUsbSetupPacket* const pUsbSetupP
       const unsigned char device_dsc[0x12] = {
                                                 0x12,         // bLength
                                                 0x01,         // bDescriptorType (Device)
-                                                0x00, 0x02,   // bcdUSB (2.0)
+                                                0x10, 0x01,   // bcdUSB (1.1)
                                                 0xEF,         // bDeviceClass (Miscellaneous Device Class)
                                                 0x02,         // bDeviceSubClass (Common Class)
                                                 0x01,         // bDeviceProtocol (Interface Association Descriptor)

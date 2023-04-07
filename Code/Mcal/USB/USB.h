@@ -25,6 +25,10 @@ void UsbInit(void);
 #define EP14    14u
 #define EP15    15u
 
+/* endpoints direction */
+#define EP_DIR_IN   0x80
+#define EP_DIR_OUT  0x00
+
 /* Data PIDs */
 #define DATA0_PID      0u
 #define DATA1_PID      1u

@@ -48,7 +48,7 @@ OPT_MODIFIED_O2 = -O2                               \
 
 NO_OPT = -O0
 
-OPT = $(OPT_MODIFIED_O2)
+OPT = $(NO_OPT)
 
 ############################################################################################
 # GCC Compiler verbose flags
@@ -258,5 +258,7 @@ $(OBJ_DIR)/%.o : %.cpp
 $(OUTPUT_DIR)/$(PRJ_NAME).elf : $(FILES_O) $(LD_SCRIPT)
 	@-echo +++ link : $(subst \,/,$@)
 	@$(LD) $(LOPS) $(FILES_O) -o $(OUTPUT_DIR)/$(PRJ_NAME).elf
+	@-echo +++ generate : $(OUTPUT_DIR)/$(PRJ_NAME).readelf
+	@$(READELF) --wide -a $(OUTPUT_DIR)/$(PRJ_NAME).elf > $(OUTPUT_DIR)/$(PRJ_NAME).readelf
 	@$(ELF2UF2) $(OUTPUT_DIR)/$(PRJ_NAME).elf $(OUTPUT_DIR)/$(PRJ_NAME).uf2
 

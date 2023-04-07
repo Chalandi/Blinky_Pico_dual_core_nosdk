@@ -4,19 +4,23 @@
 #include "usb_hwreg.h"
 #include "usb_types.h"
 
-volatile unsigned long long _EP0_[100] = {0};
-volatile unsigned int _EP0_index = 0;
-volatile unsigned int BusResetCounter = 0;
-volatile unsigned int UsbDeviceAddress = 0;
+volatile uint64 _EP0_[100] = {0};
+volatile uint32 _EP0_index = 0;
 
-volatile unsigned int UsbReceived_EP0_OUT_count = 0;
-volatile unsigned int UsbReceived_EP0_IN_count = 0;
+volatile uint64 _EP0_SpecificReq[100] = {0};
+volatile uint32 _EP0_SpecificReq_index = 0;
 
-volatile unsigned int UsbReceived_EP1_IN_count = 0;
-volatile unsigned int UsbReceived_EP1_OUT_count = 0;
+volatile uint32 BusResetCounter = 0;
+volatile uint32 UsbDeviceAddress = 0;
+
+volatile uint32 UsbReceived_EP0_OUT_count = 0;
+volatile uint32 UsbReceived_EP0_IN_count = 0;
+
+volatile uint32 UsbReceived_EP1_IN_count = 0;
+volatile uint32 UsbReceived_EP1_OUT_count = 0;
 volatile uint8 EP1_dataPid = DATA0_PID;
 
-volatile unsigned int UsbNotSupportedRequestCount = 0;
+volatile uint32 UsbNotSupportedRequestCount = 0;
 
 static void UsbDriver_HandleSetupPacket(const tUsbSetupPacket* const pUsbSetupPacket);
 static boolean UsbDriver_SendDataToHost(uint8 endpoint, uint8 pid, uint8* buffer, uint8 size);
@@ -37,7 +41,7 @@ static void UsbDriver_Req_get_interface     (const tUsbSetupPacket* const pUsbSe
 static void UsbDriver_Req_set_interface     (const tUsbSetupPacket* const pUsbSetupPacket);
 static void UsbDriver_Req_synch_frame       (const tUsbSetupPacket* const pUsbSetupPacket);
 
-volatile unsigned int __DEBUG_HALT__ = 1;
+volatile uint32 __DEBUG_HALT__ = 1;
 
 const pStandardRequestHandler StandardRequestHandlerLockupTable[13] = {
                                                                         UsbDriver_Req_get_status,
@@ -77,7 +81,7 @@ void USBCTRL_IRQ(void)
     UsbDriver_HandleSetupPacket(UsbSetupPacket);
 
     //save the data
-    _EP0_[_EP0_index++] = *(volatile unsigned long long*)(USBCTRL_DPRAM_BASE);
+    _EP0_[_EP0_index++] = *(volatile uint64*)(USBCTRL_DPRAM_BASE);
   }
   
   /* handle bus reset */
@@ -114,7 +118,7 @@ void USBCTRL_IRQ(void)
       if(UsbDeviceAddress != 0)
       {
         /* setup device address */
-        USBCTRL_REGS->ADDR_ENDP.reg |= (unsigned int)(UsbDeviceAddress & 0x7Ful);
+        USBCTRL_REGS->ADDR_ENDP.reg |= (uint32)(UsbDeviceAddress & 0x7Ful);
       }
 
       /* configure the expected OUT packet */
@@ -202,9 +206,9 @@ void UsbInit(void)
     while(RESETS->RESET_DONE.bit.usbctrl != 1);
 
     //clear the DPRAM
-    for(unsigned int i=0; i < 4096U; i = i+8)
+    for(uint32 i=0; i < 4096U; i = i+8)
     {
-      *(volatile unsigned long long*)(USBCTRL_DPRAM_BASE + i) = 0;
+      *(volatile uint64*)(USBCTRL_DPRAM_BASE + i) = 0;
     }
 
     //enable USB
@@ -361,6 +365,11 @@ static void UsbDriver_HandleSetupPacket(const tUsbSetupPacket* const pUsbSetupPa
     /* call the appropriate handler */
     StandardRequestHandlerLockupTable[Request](pUsbSetupPacket);
   }
+  else
+  {
+    /* class specific requests */
+    _EP0_SpecificReq[_EP0_SpecificReq_index++] = *(volatile uint64*)pUsbSetupPacket;
+  }
 }
 
 //-----------------------------------------------------------------------------------------
@@ -427,71 +436,181 @@ static void UsbDriver_Req_get_descriptor(const tUsbSetupPacket* const pUsbSetupP
   {
       /* send the device descriptor */
       const unsigned char device_dsc[0x12] = {
-                                                0x12,      // bLength
-                                                0x01,      // bDescriptorType
-                                                0x10,0x01, // bcdUSB
-                                                0x00,      // bDeviceClass
-                                                0x00,      // bDeviceSubClass
-                                                0x00,      // bDeviceProtocol
-                                                64,        // bMaxPacketSize0
-                                                0x8a,0x2e, // idVendor
-                                                0x0a,0x00, // idProduct
-                                                0x01,0x00, // bcdDevice
-                                                0x01,      // iManufacturer
-                                                0x02,      // iProduct
-                                                0x03,      // iSerialNumber
-                                                0x01       // bNumConfigurations
-                                              };
+                                                0x12,         // bLength
+                                                0x01,         // bDescriptorType (Device)
+                                                0x00, 0x02,   // bcdUSB (2.0)
+                                                0xEF,         // bDeviceClass (Miscellaneous Device Class)
+                                                0x02,         // bDeviceSubClass (Common Class)
+                                                0x01,         // bDeviceProtocol (Interface Association Descriptor)
+                                                0x40,         // bMaxPacketSize0 (64 bytes)
+                                                0x8a, 0x2e,   // idVendor
+                                                0x0a, 0x00,   // idProduct
+                                                0x01, 0x00,   // bcdDevice (Device Version 0.01)
+                                                0x01,         // iManufacturer (String Index 1)
+                                                0x02,         // iProduct (String Index 2)
+                                                0x03,         // iSerialNumber (String Index 3)
+                                                0x01          // bNumConfigurations (1 configuration)
+                                             };
       UsbDriver_SendDataToHost(EP0, DATA1_PID, (uint8*)device_dsc, sizeof(device_dsc));
     }
     else if(USB_DESCRIPTOR_TYPE_CONFIGURATION == DescriptorType)
     {
       /* send configuration descriptor */
-      const unsigned char configuration_dsc[]={
-                                                 // Configuration Descriptor
-                                                 0x09,                   // bLength             - Descriptor size in bytes
-                                                 0x02,                   // bDescriptorType     - The constant CONFIGURATION (02h)
-                                                 0x20,0x00,              // wTotalLength        - The number of bytes in the configuration descriptor and all of its subordinate descriptors
-                                                 1,                      // bNumInterfaces      - Number of interfaces in the configuration
-                                                 1,                      // bConfigurationValue - Identifier for Set Configuration and Get Configuration requests
-                                                 0,                      // iConfiguration      - Index of string descriptor for the configuration
-                                                 0x80,                   // bmAttributes        - Self/bus power and remote wakeup settings (Self powered 0xC0,  0x80 bus powered)
-                                                 50,                     // bMaxPower           - Bus power required in units of 2 mA
-                                             
-                                                 // Interface Descriptor
-                                                 0x09,                   // bLength - Descriptor size in bytes (09h)
-                                                 0x04,                   // bDescriptorType - The constant Interface (04h)
-                                                 0,                      // bInterfaceNumber - Number identifying this interface
-                                                 0,                      // bAlternateSetting - A number that identifies a descriptor with alternate settings for this bInterfaceNumber.
-                                                 2,                      // bNumEndpoint - Number of endpoints supported not counting endpoint zero
-                                                 0xff,                   // bInterfaceClass - Class code
-                                                 0xff,                   // bInterfaceSubclass - Subclass code
-                                                 0xff,                   // bInterfaceProtocol - Protocol code
-                                                 0,                      // iInterface - Interface string index
+      static const uint8 configuration_dsc[] = {
+          /* Configuration Descriptor */
+          0x09,                                 // bLength: Configuration Descriptor size
+          0x02,                                 // bDescriptorType: Configuration
+          98, 0x00,                             // wTotalLength: The number of bytes in the configuration descriptor and all of its subordinate descriptors
+          0x03,                                 // bNumInterfaces: 3 interfaces (1 for vendor custom class, 1 for CDC Control and 1 for CDC Data)
+          0x01,                                 // bConfigurationValue: this Configuration index
+          0x00,                                 // iConfiguration: Index of string descriptor describing the configuration
+          0x80,                                 // bmAttributes: Self-powered
+          250,                                  // bMaxPower: 500 mA
 
-                                                 // Endpoint Descriptor (IN)
-                                                 0x07,                   // bLength - Descriptor size in bytes (07h)
-                                                 0x05,                   // bDescriptorType - The constant Endpoint (05h)
-                                                 1 | 0x80,               // bEndpointAddress - Endpoint number and direction
-                                                 0x02,                   // bmAttributes - Transfer type and supplementary information
-                                                 0x40,0x00,              // wMaxPacketSize - Maximum packet size supported
-                                                 255,                    // bInterval - Service interval or NAK rate
-                                             
-                                                 // Endpoint Descriptor (OUT)
-                                                 0x07,                   // bLength - Descriptor size in bytes (07h)
-                                                 0x05,                   // bDescriptorType - The constant Endpoint (05h)
-                                                 1,                      // bEndpointAddress - Endpoint number and direction
-                                                 0x02,                   // bmAttributes - Transfer type and supplementary information
-                                                 0x40,0x00,              // wMaxPacketSize - Maximum packet size supported
-                                                 255                     // bInterval - Service interval or NAK rate
-                                             };
+          // Interface Descriptor (vendor custom class)
+          0x09,                                // bLength - Descriptor size in bytes (09h)
+          0x04,                                // bDescriptorType - The constant Interface (04h)
+          0,                                   // bInterfaceNumber - Interface number 0
+          0,                                   // bAlternateSetting - A number that identifies a descriptor with alternate settings for this bInterfaceNumber.
+          2,                                   // bNumEndpoint - Number of endpoints supported not counting endpoint zero
+          0xff,                                // bInterfaceClass - Class code
+          0xff,                                // bInterfaceSubclass - Subclass code
+          0xff,                                // bInterfaceProtocol - Protocol code
+          0,                                   // iInterface - Interface string index
+          
+          // Endpoint Descriptor (IN)
+          0x07,                                // bLength - Descriptor size in bytes (07h)
+          0x05,                                // bDescriptorType - The constant Endpoint (05h)
+          EP_DIR_IN | EP1,                     // bEndpointAddress - Endpoint number and direction
+          0x02,                                // bmAttributes - Transfer type and supplementary information
+          0x40,0x00,                           // wMaxPacketSize - Maximum packet size supported
+          255,                                 // bInterval - Service interval or NAK rate
+          
+          // Endpoint Descriptor (OUT)
+          0x07,                                // bLength - Descriptor size in bytes (07h)
+          0x05,                                // bDescriptorType - The constant Endpoint (05h)
+          EP_DIR_OUT | EP1,                    // bEndpointAddress - Endpoint number and direction
+          0x02,                                // bmAttributes - Transfer type and supplementary information
+          0x40,0x00,                           // wMaxPacketSize - Maximum packet size supported
+          255,                                 // bInterval - Service interval or NAK rate
+
+          /* Interface Association Descriptor (IAD) for CDC/ACM */
+          0x08,                                // bLength: Interface Descriptor size
+          0x0B,                                // bDescriptorType: IAD
+          0x01,                                // bFirstInterface: First interface number (1)
+          0x02,                                // bInterfaceCount: Number of interfaces for this function (2)
+          0x02,                                // bFunctionClass: Communication Interface Class (CDC)
+          0x02,                                // bFunctionSubClass: Abstract Control Model (ACM)
+          0x00,                                // bFunctionProtocol: ????
+          0x00,                                // iFunction: Index of string descriptor describing this function
+      
+          /* Interface Descriptor (CDC Control) */
+          0x09,                                // bLength: Interface Descriptor size
+          0x04,                                // bDescriptorType: Interface
+          1,                                   // bInterfaceNumber: Interface number 1
+          0x00,                                // bAlternateSetting: Alternate setting
+          0x01,                                // bNumEndpoints: One endpoint (CDC Control)
+          0x02,                                // bInterfaceClass: CDC
+          0x02,                                // bInterfaceSubClass: Abstract Control Model
+          0x00,                                // bInterfaceProtocol: V.25ter (AT commands)
+          0x00,                                // iInterface: Index of string descriptor describing this interface
+      
+          /* CDC Header Functional Descriptor */
+          0x05,                                // bLength: CDC header Descriptor size
+          0x24,                                // bDescriptorType: CS_INTERFACE
+          0x00,                                // bDescriptorSubType: Header
+          0x20, 0x01,                          // bcdCDC: CDC specification release number
+      
+          /* CDC Call Management Functional Descriptor */
+          0x05,                                // bLength: CDC Call Management Descriptor size
+          0x24,                                // bDescriptorType: CS_INTERFACE
+          0x01,                                // bDescriptorSubType: Call Management
+          0x00,                                // bmCapabilities: Device does not handle call management itself
+          0x01,                                // bDataInterface: Interface number of Data Class interface
+      
+          /* CDC Abstract Control Management Functional Descriptor */
+          0x04,                                // bLength: CDC Abstract Control Management Descriptor size
+          0x24,                                // bDescriptorType: CS_INTERFACE
+          0x02,                                // bDescriptorSubType: Abstract Control Management
+          0x02,                                // bmCapabilities: Device supports the request combination of Set_Line_Coding, Set_Control_Line_State, Get_Line_Coding, and the notification Serial_State
+      
+          /* CDC Union Functional Descriptor */
+          0x05,                                // bLength: CDC Union Descriptor size
+          0x24,                                // bDescriptorType: CS_INTERFACE
+          0x06,                                // bDescriptorSubType: Union
+          0x01,                                // bControlInterface: Interface number of the Control interface
+          0x02,                                // bSubordinateInterface0: Interface number of the subordinate interface
+      
+          /* Endpoint Descriptor (CDC Control IN) */
+          0x07,                                // bLength: Endpoint Descriptor size
+          0x05,                                // bDescriptorType: Endpoint
+          EP_DIR_IN | EP3,                     // bEndpointAddress: CDC Control endpoint address (IN)
+          0x03,                                // bmAttributes: Interrupt
+          0x08, 0x00,                          // wMaxPacketSize: CDC Control packet size (8 bytes)
+          0x10,                                // bInterval: Polling interval (16ms)
+      
+          /* Interface Descriptor (CDC Data) */
+          0x09,                                // bLength: Interface Descriptor size
+          0x04,                                // bDescriptorType: Interface
+          2,                                   // bInterfaceNumber: Interface number 2
+          0x00,                                // bAlternateSetting: Alternate setting
+          0x02,                                // bNumEndpoints: Two endpoints (CDC Data)
+          0x0A,                                // bInterfaceClass: CDC Data
+          0x00,                                // bInterfaceSubClass
+          0x00,                                // bInterfaceProtocol
+          0x00,                                // iInterface: Index of string descriptor describing this interface
+      
+          /* Endpoint Descriptor (CDC Data IN) */
+          0x07,                                // bLength: Endpoint Descriptor size
+          0x05,                                // bDescriptorType: Endpoint
+          EP_DIR_IN | EP2,                     // bEndpointAddress: CDC Data IN endpoint address
+          0x02,                                // bmAttributes: Bulk
+          0x40, 0x00,                          // wMaxPacketSize: CDC Data packet size (64 bytes)
+          0x00,                                // bInterval: Never NAK
+      
+          /* Endpoint Descriptor (CDC Data OUT) */
+          0x07,                                // bLength: Endpoint Descriptor size
+          0x05,                                // bDescriptorType: Endpoint
+          EP_DIR_OUT | EP2,                    // bEndpointAddress: CDC Data OUT endpoint address
+          0x02,                                // bmAttributes: Bulk
+          0x40, 0x00,                          // wMaxPacketSize: CDC Data packet size (64 bytes)
+          0x00                                 // bInterval: Never NAK
+      };
+
 
       /* check the configuration size requested by the host 
          note: we must send exactly the requested size otherwise the host will abort the enumeration process */
-      const uint8 size = (uint8)(pUsbSetupPacket->wLength) > sizeof(configuration_dsc) ? sizeof(configuration_dsc) : (uint8)(pUsbSetupPacket->wLength);
+       /*const*/ uint8 size = (((uint8)(pUsbSetupPacket->wLength) > sizeof(configuration_dsc)) && (sizeof(configuration_dsc) < 65u)) ? sizeof(configuration_dsc) : (uint8)(pUsbSetupPacket->wLength);
 
-      /* send the configuration to the host */
-      UsbDriver_SendDataToHost(EP0, DATA1_PID, (uint8*)configuration_dsc, (uint8)size);
+      static /*const*/ uint8 number_of_64_packet_size   = sizeof(configuration_dsc) / 64u;
+      static /*const*/ uint8 remaining_config_data_size = sizeof(configuration_dsc) % 64u;
+
+      EPx_BUFFER_CONTROL* epx_in_buffer_control = (EPx_BUFFER_CONTROL*)(USBCTRL_DPRAM_BASE + EPx_IN_BUFFER_CONTROL_OFFSET + (EP0 * 8ul));
+
+      if(size > 64u)
+      {
+        uint8 data_pid = DATA1_PID;
+
+        for(uint32 i=0; i < number_of_64_packet_size; i++)
+        {
+          UsbDriver_SendDataToHost(EP0, data_pid, (uint8*)((uint32)configuration_dsc + i*64u), (uint8)64);
+          
+          data_pid ^= 1u;
+
+          /* wait till the buffer got transmitterd */
+          while(epx_in_buffer_control->bit.FULL_0);
+        }
+
+        /* send the remaining data */
+        UsbDriver_SendDataToHost(EP0, data_pid, (uint8*)((uint32)configuration_dsc + number_of_64_packet_size*64u), (uint8)remaining_config_data_size);
+
+      }
+      else
+      {
+        /* only one packet of 64-byte max */
+        /* send the configuration to the host */
+        UsbDriver_SendDataToHost(EP0, DATA1_PID, (uint8*)configuration_dsc, (uint8)size);
+      }
     }
     else if(USB_DESCRIPTOR_TYPE_HID_REPORT == DescriptorType)
     {

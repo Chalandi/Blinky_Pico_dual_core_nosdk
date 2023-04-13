@@ -84,7 +84,7 @@ COPS  = -mlittle-endian                               \
         -Wunreachable-code                            \
         -Wmissing-include-dirs                        \
         -x c                                          \
-        -std=c99                                      \
+        -std=c11                                      \
         -Wall                                         \
         -Wextra                                       \
         -fomit-frame-pointer                          \

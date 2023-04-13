@@ -1,3 +1,19 @@
+/******************************************************************************************
+  Filename    : USB.h
+  
+  Core        : ARM Cortex-M0+
+  
+  MCU         : RP2040
+    
+  Author      : Chalandi Amine
+ 
+  Owner       : Chalandi Amine
+  
+  Date        : 01.04.2023
+  
+  Description : USB low level device driver header file
+  
+******************************************************************************************/
 
 #ifndef __USB_H__
 #define __USB_H__
@@ -46,8 +62,13 @@ void UsbInit(void);
 #define USB_REQ_SET_INTERFACE     11u
 #define USB_REQ_SYNCH_FRAME       12u
 
-#define USB_REQ_DIR_DEVICE_TO_HOST  (1ul << 7)
-#define USB_REQ_DIR_HOST_TO_DEVICE  (0ul << 7)
+#define USB_REQ_DIR_DEVICE_TO_HOST       1u
+#define USB_REQ_DIR_HOST_TO_DEVICE       0u
+
+#define USB_REQ_TYPE_STANDARD            0u
+#define USB_REQ_TYPE_CLASS               1u
+#define USB_REQ_TYPE_VENDOR              2u
+#define USB_REQ_TYPE_RESERVED            3u
 
 #define USB_REQ_RECIPIENT_DEVICE         0u
 #define USB_REQ_RECIPIENT_INTERFACE      1u

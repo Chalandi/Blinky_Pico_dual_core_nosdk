@@ -3,4 +3,4 @@
 
 # ignore Visual Studio's user-specific files
 /.vs/
-/*.user
+*.user

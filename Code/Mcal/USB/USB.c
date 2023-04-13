@@ -1,9 +1,31 @@
+/******************************************************************************************
+  Filename    : USB.c
+  
+  Core        : ARM Cortex-M0+
+  
+  MCU         : RP2040
+    
+  Author      : Chalandi Amine
+ 
+  Owner       : Chalandi Amine
+  
+  Date        : 01.04.2023
+  
+  Description : USB low level device driver implementation
+  
+******************************************************************************************/
 
+//=============================================================================
+// Includes
+//=============================================================================
 #include "RP2040.h"
 #include "USB.h"
 #include "usb_hwreg.h"
 #include "usb_types.h"
 
+//=============================================================================
+// Globals
+//=============================================================================
 volatile uint64 _EP0_[100] = {0};
 volatile uint32 _EP0_index = 0;
 
@@ -97,6 +119,9 @@ void USBCTRL_IRQ(void)
   /* handle OUT and IN packets */
   if(USBCTRL_REGS->INTS.bit.BUFF_STATUS)
   {
+    /***************************************************************************/
+    /* endpoint 0 */
+    /***************************************************************************/
     if(USBCTRL_REGS->BUFF_STATUS.bit.EP0_OUT)
     {
         UsbReceived_EP0_OUT_count++;
@@ -124,12 +149,15 @@ void USBCTRL_IRQ(void)
       /* configure the expected OUT packet */
       UsbDriver_PrepareOutBufForReceiveDataFromHost(EP0, DATA1_PID, 0);
     }
+
     if(USBCTRL_REGS->BUFF_STATUS.bit.EP1_OUT)
     {
         UsbReceived_EP1_OUT_count++;
 
        /* clear the EP0_OUT buffer status */
        USBCTRL_REGS->BUFF_STATUS.bit.EP1_OUT = 1;
+
+       /* TODO: copy the received data and call the handler */
 
        EP1_dataPid ^= 1u;
        UsbDriver_PrepareOutBufForReceiveDataFromHost(EP1, EP1_dataPid, 64u);
@@ -140,6 +168,8 @@ void USBCTRL_IRQ(void)
 
        /* clear the EP0_IN buffer status */
        USBCTRL_REGS->BUFF_STATUS.bit.EP1_IN = 1;
+
+       /* TODO: notify the handler */
 
        /* update the EP1_OUT buffer config with the new expect data pid */
        EP1_dataPid ^= 1u;
@@ -359,16 +389,28 @@ static boolean UsbDriver_PrepareOutBufForReceiveDataFromHost(uint8 endpoint, uin
 static void UsbDriver_HandleSetupPacket(const tUsbSetupPacket* const pUsbSetupPacket)
 {
   const uint8 Request = pUsbSetupPacket->bRequest;
+  const tbmRequestType* const bmRequestType = (tbmRequestType*)(pUsbSetupPacket);
 
-  if(Request < 13u && StandardRequestHandlerLockupTable[Request] != NULL)
+  if((bmRequestType->Type == USB_REQ_TYPE_STANDARD) && (Request < 13u) && (StandardRequestHandlerLockupTable[Request] != NULL))
   {
     /* call the appropriate handler */
     StandardRequestHandlerLockupTable[Request](pUsbSetupPacket);
   }
-  else
+  else if(bmRequestType->Type == USB_REQ_TYPE_CLASS)
   {
     /* class specific requests */
+    if(bmRequestType->TransferDirection == USB_REQ_DIR_DEVICE_TO_HOST)
+    {
+      /* IN token is expected from the host, handle the specific request immediatly to the upper layer */
+    }
+    else
+    {
+      /* OUT token is expected from the host, handle the specific request to upper layer after receiving the data on EP0 */
+    }
     _EP0_SpecificReq[_EP0_SpecificReq_index++] = *(volatile uint64*)pUsbSetupPacket;
+  }
+  else
+  {
   }
 }
 
@@ -580,10 +622,10 @@ static void UsbDriver_Req_get_descriptor(const tUsbSetupPacket* const pUsbSetupP
 
       /* check the configuration size requested by the host 
          note: we must send exactly the requested size otherwise the host will abort the enumeration process */
-       /*const*/ uint8 size = (((uint8)(pUsbSetupPacket->wLength) > sizeof(configuration_dsc)) && (sizeof(configuration_dsc) < 65u)) ? sizeof(configuration_dsc) : (uint8)(pUsbSetupPacket->wLength);
+      const uint8 size = (((uint8)(pUsbSetupPacket->wLength) > sizeof(configuration_dsc)) && (sizeof(configuration_dsc) < 65u)) ? sizeof(configuration_dsc) : (uint8)(pUsbSetupPacket->wLength);
 
-      static /*const*/ uint8 number_of_64_packet_size   = sizeof(configuration_dsc) / 64u;
-      static /*const*/ uint8 remaining_config_data_size = sizeof(configuration_dsc) % 64u;
+      const uint8 number_of_64_packet_size   = sizeof(configuration_dsc) / 64u;
+      const uint8 remaining_config_data_size = sizeof(configuration_dsc) % 64u;
 
       EPx_BUFFER_CONTROL* epx_in_buffer_control = (EPx_BUFFER_CONTROL*)(USBCTRL_DPRAM_BASE + EPx_IN_BUFFER_CONTROL_OFFSET + (EP0 * 8ul));
 
@@ -671,7 +713,6 @@ static void UsbDriver_Req_get_descriptor(const tUsbSetupPacket* const pUsbSetupP
       }
       else
       {
-        //for(;;);
         UsbDriver_SendStallToHost(EP0, DATA1_PID);
       }
     }

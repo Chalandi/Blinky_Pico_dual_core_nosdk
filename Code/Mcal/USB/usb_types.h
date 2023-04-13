@@ -16,6 +16,13 @@ typedef struct
   uint16 wLength;
 }tUsbSetupPacket;
 
+typedef struct
+{
+  uint8 Recipient:5u;
+  uint8 Type:2u;
+  uint8 TransferDirection:1u;
+}tbmRequestType;
+
 //------------------------------------------------------------------------------------------------------------------
 // Device Descriptor
 //------------------------------------------------------------------------------------------------------------------

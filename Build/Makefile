@@ -73,6 +73,7 @@ COPS  = -mlittle-endian                               \
         -mthumb                                       \
         -mabi=aapcs                                   \
         -ffast-math                                   \
+        -MD                                           \
         -Wa,-adhln=$(OBJ_DIR)/$(basename $(@F)).lst   \
         -g3                                           \
         -Wconversion                                  \

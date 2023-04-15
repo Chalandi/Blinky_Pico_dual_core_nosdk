@@ -22,9 +22,10 @@
 #include "USB.h"
 #include "usb_hwreg.h"
 #include "usb_types.h"
+#include <string.h>
 
 //=============================================================================
-// Globals
+// Globals (Debug purpose only)
 //=============================================================================
 volatile uint64 _EP0_[100] = {0};
 volatile uint32 _EP0_index = 0;
@@ -33,53 +34,70 @@ volatile uint64 _EP0_SpecificReq[100] = {0};
 volatile uint32 _EP0_SpecificReq_index = 0;
 
 volatile uint32 BusResetCounter = 0;
-volatile uint32 UsbDeviceAddress = 0;
 
 volatile uint32 UsbReceived_EP0_OUT_count = 0;
 volatile uint32 UsbReceived_EP0_IN_count = 0;
 
 volatile uint32 UsbReceived_EP1_IN_count = 0;
 volatile uint32 UsbReceived_EP1_OUT_count = 0;
-volatile uint8 EP1_dataPid = DATA0_PID;
+
+volatile uint32 UsbReceived_EP2_IN_count = 0;
+volatile uint32 UsbReceived_EP2_OUT_count = 0;
+
+volatile uint32 UsbReceived_EP3_IN_count = 0;
+volatile uint32 UsbReceived_EP3_OUT_count = 0;
 
 volatile uint32 UsbNotSupportedRequestCount = 0;
 
-static void UsbDriver_HandleSetupPacket(const tUsbSetupPacket* const pUsbSetupPacket);
-static boolean UsbDriver_SendDataToHost(uint8 endpoint, uint8 pid, uint8* buffer, uint8 size);
-static boolean UsbDriver_PrepareOutBufForReceiveDataFromHost(uint8 endpoint, uint8 pid, uint8 size);
-static boolean UsbDriver_SendStallToHost(uint8 endpoint, uint8 pid);
-
-typedef void (*pStandardRequestHandler)(const tUsbSetupPacket* const pUsbSetupPacket);
-
-static void UsbDriver_Req_get_status        (const tUsbSetupPacket* const pUsbSetupPacket);
-static void UsbDriver_Req_clear_feature     (const tUsbSetupPacket* const pUsbSetupPacket);
-static void UsbDriver_Req_set_feature       (const tUsbSetupPacket* const pUsbSetupPacket);
-static void UsbDriver_Req_set_address       (const tUsbSetupPacket* const pUsbSetupPacket);
-static void UsbDriver_Req_get_descriptor    (const tUsbSetupPacket* const pUsbSetupPacket);
-static void UsbDriver_Req_set_descriptor    (const tUsbSetupPacket* const pUsbSetupPacket);
-static void UsbDriver_Req_get_configuration (const tUsbSetupPacket* const pUsbSetupPacket);
-static void UsbDriver_Req_set_configuration (const tUsbSetupPacket* const pUsbSetupPacket);
-static void UsbDriver_Req_get_interface     (const tUsbSetupPacket* const pUsbSetupPacket);
-static void UsbDriver_Req_set_interface     (const tUsbSetupPacket* const pUsbSetupPacket);
-static void UsbDriver_Req_synch_frame       (const tUsbSetupPacket* const pUsbSetupPacket);
-
 volatile uint32 __DEBUG_HALT__ = 1;
 
-const pStandardRequestHandler StandardRequestHandlerLockupTable[13] = {
-                                                                        UsbDriver_Req_get_status,
-                                                                        UsbDriver_Req_clear_feature,
-                                                                        NULL,
-                                                                        UsbDriver_Req_set_feature,
-                                                                        NULL,
-                                                                        UsbDriver_Req_set_address,
-                                                                        UsbDriver_Req_get_descriptor,
-                                                                        UsbDriver_Req_set_descriptor,
-                                                                        UsbDriver_Req_get_configuration,
-                                                                        UsbDriver_Req_set_configuration,
-                                                                        UsbDriver_Req_get_interface,
-                                                                        UsbDriver_Req_set_interface,
-                                                                        UsbDriver_Req_synch_frame
-                                                                      };
+//=============================================================================
+// Local types
+//=============================================================================
+typedef void (*pStandardRequestHandler)(const tUsbSetupPacket* const pUsbSetupPacket);
+
+//=============================================================================
+// Static functions
+//=============================================================================
+static void    UsbDriver_HandleSetupPacket     (const tUsbSetupPacket* const pUsbSetupPacket);
+static boolean UsbDriver_SendDataToHost        (uint8 endpoint, uint8 pid, uint8* buffer, uint8 size);
+static boolean UsbDriver_ConfigureEpOutBuf     (uint8 endpoint, uint8 pid, uint8 size);
+static boolean UsbDriver_SendStallToHost       (uint8 endpoint, uint8 pid);
+static boolean UsbDriver_ConfigureEndpoint     (uint8 endpoint, uint8 direction, uint8 type);
+static void    UsbDriver_Req_get_status        (const tUsbSetupPacket* const pUsbSetupPacket);
+static void    UsbDriver_Req_clear_feature     (const tUsbSetupPacket* const pUsbSetupPacket);
+static void    UsbDriver_Req_set_feature       (const tUsbSetupPacket* const pUsbSetupPacket);
+static void    UsbDriver_Req_set_address       (const tUsbSetupPacket* const pUsbSetupPacket);
+static void    UsbDriver_Req_get_descriptor    (const tUsbSetupPacket* const pUsbSetupPacket);
+static void    UsbDriver_Req_set_descriptor    (const tUsbSetupPacket* const pUsbSetupPacket);
+static void    UsbDriver_Req_get_configuration (const tUsbSetupPacket* const pUsbSetupPacket);
+static void    UsbDriver_Req_set_configuration (const tUsbSetupPacket* const pUsbSetupPacket);
+static void    UsbDriver_Req_get_interface     (const tUsbSetupPacket* const pUsbSetupPacket);
+static void    UsbDriver_Req_set_interface     (const tUsbSetupPacket* const pUsbSetupPacket);
+static void    UsbDriver_Req_synch_frame       (const tUsbSetupPacket* const pUsbSetupPacket);
+
+//=============================================================================
+// Globals
+//=============================================================================
+static volatile uint32 UsbDeviceAddress = 0;
+static volatile uint8 EPx_dataPid[16] = {DATA0_PID};
+
+static const pStandardRequestHandler 
+    StandardRequestHandlerLockupTable[13] = {
+      UsbDriver_Req_get_status,
+      UsbDriver_Req_clear_feature,
+      NULL,
+      UsbDriver_Req_set_feature,
+      NULL,
+      UsbDriver_Req_set_address,
+      UsbDriver_Req_get_descriptor,
+      UsbDriver_Req_set_descriptor,
+      UsbDriver_Req_get_configuration,
+      UsbDriver_Req_set_configuration,
+      UsbDriver_Req_get_interface,
+      UsbDriver_Req_set_interface,
+      UsbDriver_Req_synch_frame
+    };
 
 //-----------------------------------------------------------------------------------------
 /// \brief  
@@ -128,6 +146,9 @@ void USBCTRL_IRQ(void)
 
        /* clear the EP0_OUT buffer status */
        USBCTRL_REGS->BUFF_STATUS.bit.EP0_OUT = 1;
+
+      /* configure the expected OUT packet */
+      UsbDriver_ConfigureEpOutBuf(EP0, DATA1_PID, 64);
     }
 
     if(USBCTRL_REGS->BUFF_STATUS.bit.EP0_IN)
@@ -147,33 +168,92 @@ void USBCTRL_IRQ(void)
       }
 
       /* configure the expected OUT packet */
-      UsbDriver_PrepareOutBufForReceiveDataFromHost(EP0, DATA1_PID, 0);
+      UsbDriver_ConfigureEpOutBuf(EP0, DATA1_PID, 64);
     }
 
+    /***************************************************************************/
+    /* endpoint 1 */
+    /***************************************************************************/
     if(USBCTRL_REGS->BUFF_STATUS.bit.EP1_OUT)
     {
         UsbReceived_EP1_OUT_count++;
 
-       /* clear the EP0_OUT buffer status */
+       /* clear the EP1_OUT buffer status */
        USBCTRL_REGS->BUFF_STATUS.bit.EP1_OUT = 1;
 
        /* TODO: copy the received data and call the handler */
 
-       EP1_dataPid ^= 1u;
-       UsbDriver_PrepareOutBufForReceiveDataFromHost(EP1, EP1_dataPid, 64u);
+       EPx_dataPid[EP1] ^= 1u;
+       UsbDriver_ConfigureEpOutBuf(EP1, EPx_dataPid[EP1], 64u);
     }
     if(USBCTRL_REGS->BUFF_STATUS.bit.EP1_IN)
     {
         UsbReceived_EP1_IN_count++;
 
-       /* clear the EP0_IN buffer status */
+       /* clear the EP1_IN buffer status */
        USBCTRL_REGS->BUFF_STATUS.bit.EP1_IN = 1;
 
        /* TODO: notify the handler */
 
        /* update the EP1_OUT buffer config with the new expect data pid */
-       EP1_dataPid ^= 1u;
-       UsbDriver_PrepareOutBufForReceiveDataFromHost(EP1, EP1_dataPid, 64u);
+       EPx_dataPid[EP1] ^= 1u;
+       UsbDriver_ConfigureEpOutBuf(EP1, EPx_dataPid[EP1], 64u);
+    }
+    /***************************************************************************/
+    /* endpoint 2 */
+    /***************************************************************************/
+    if(USBCTRL_REGS->BUFF_STATUS.bit.EP2_OUT)
+    {
+        UsbReceived_EP2_OUT_count++;
+
+       /* clear the EP2_OUT buffer status */
+       USBCTRL_REGS->BUFF_STATUS.bit.EP2_OUT = 1;
+
+       /* TODO: copy the received data and call the handler */
+
+       EPx_dataPid[EP2] ^= 1u;
+       UsbDriver_ConfigureEpOutBuf(EP2, EPx_dataPid[EP2], 64u);
+    }
+    if(USBCTRL_REGS->BUFF_STATUS.bit.EP2_IN)
+    {
+        UsbReceived_EP2_IN_count++;
+
+       /* clear the EP2_IN buffer status */
+       USBCTRL_REGS->BUFF_STATUS.bit.EP2_IN = 1;
+
+       /* TODO: notify the handler */
+
+       /* update the EP2_OUT buffer config with the new expect data pid */
+       EPx_dataPid[EP2] ^= 1u;
+       UsbDriver_ConfigureEpOutBuf(EP2, EPx_dataPid[EP2], 64u);
+    }
+    /***************************************************************************/
+    /* endpoint 3 */
+    /***************************************************************************/
+    if(USBCTRL_REGS->BUFF_STATUS.bit.EP3_OUT)
+    {
+        UsbReceived_EP3_OUT_count++;
+
+       /* clear the EP3_OUT buffer status */
+       USBCTRL_REGS->BUFF_STATUS.bit.EP3_OUT = 1;
+
+       /* TODO: copy the received data and call the handler */
+
+       EPx_dataPid[EP3] ^= 1u;
+       UsbDriver_ConfigureEpOutBuf(EP3, EPx_dataPid[EP3], 64u);
+    }
+    if(USBCTRL_REGS->BUFF_STATUS.bit.EP3_IN)
+    {
+        UsbReceived_EP3_IN_count++;
+
+       /* clear the EP3_IN buffer status */
+       USBCTRL_REGS->BUFF_STATUS.bit.EP3_IN = 1;
+
+       /* TODO: notify the handler */
+
+       /* update the EP3_OUT buffer config with the new expect data pid */
+       EPx_dataPid[EP3] ^= 1u;
+       UsbDriver_ConfigureEpOutBuf(EP3, EPx_dataPid[EP3], 64u);
     }
   }
 
@@ -190,7 +270,29 @@ void USBCTRL_IRQ(void)
 
        /* send back the last received data from the host (echo test) */
        uint8* const pBuffer_EP1 = (uint8*)((uint32)(USBCTRL_DPRAM_BASE + 0x100u + (EP1 * 0x80u)));
-       UsbDriver_SendDataToHost(EP1, EP1_dataPid, pBuffer_EP1, 4u);
+       UsbDriver_SendDataToHost(EP1, EPx_dataPid[EP1], pBuffer_EP1, 4u);
+    }
+    
+    if(USBCTRL_REGS->EP_STATUS_STALL_NAK.bit.EP2_IN)
+    {
+      /* NAK token was sent by the device controller as response for IN token from host.
+         this means that the host is requesting a DATA packet on EP2_IN
+      */
+       /* clear the EP2_IN NAK interrupt flag */
+       USBCTRL_REGS->EP_STATUS_STALL_NAK.bit.EP2_IN = 1u;
+
+       /* send empty data from the host (echo test) */
+       static const uint8* const msg = "My CDC driver is working :) \r\n";
+       UsbDriver_SendDataToHost(EP2, EPx_dataPid[EP2], (uint8*)msg, (uint8)strlen(msg));
+    }
+
+    if(USBCTRL_REGS->EP_STATUS_STALL_NAK.bit.EP3_IN)
+    {
+      /* NAK token was sent by the device controller as response for IN token from host.
+         this means that the host is requesting a DATA packet on EP3_IN
+      */
+       /* clear the EP3_IN NAK interrupt flag */
+       USBCTRL_REGS->EP_STATUS_STALL_NAK.bit.EP3_IN = 1u;
     }
   }
 }
@@ -264,25 +366,66 @@ void UsbInit(void)
     __enable_irq();
 
     /* enable endpoint 1 */
-    USBCTRL_DPRAM->EP1_IN_CONTROL.reg                    = 0;
-    USBCTRL_DPRAM->EP1_IN_CONTROL.bit.INTERRUPT_PER_BUFF = 1u;
-    USBCTRL_DPRAM->EP1_IN_CONTROL.bit.INTERRUPT_ON_NAK   = 1u;
-    USBCTRL_DPRAM->EP1_IN_CONTROL.bit.INTERRUPT_ON_STALL = 1u;
-    USBCTRL_DPRAM->EP1_IN_CONTROL.bit.ENDPOINT_TYPE      = 2u;
-    USBCTRL_DPRAM->EP1_IN_CONTROL.bit.BUFFER_ADDRESS     = (uint16)(0x100u + (EP1 * 0x80u));
-    USBCTRL_DPRAM->EP1_IN_CONTROL.bit.ENABLE             = 1u;
+    UsbDriver_ConfigureEndpoint(EP1, EP_DIR_IN, 2u);
+    UsbDriver_ConfigureEndpoint(EP1, EP_DIR_OUT, 2u);
+    UsbDriver_ConfigureEpOutBuf(EP1, EPx_dataPid[EP1], 64u);
 
-    USBCTRL_DPRAM->EP1_OUT_CONTROL.reg                    = 0u;
-    USBCTRL_DPRAM->EP1_OUT_CONTROL.bit.INTERRUPT_PER_BUFF = 1u;
-    USBCTRL_DPRAM->EP1_OUT_CONTROL.bit.ENDPOINT_TYPE      = 2u;
-    USBCTRL_DPRAM->EP1_OUT_CONTROL.bit.BUFFER_ADDRESS     = (uint16)(0x100u + (EP1 * 0x80u));
-    USBCTRL_DPRAM->EP1_OUT_CONTROL.bit.ENABLE             = 1u;
+    /* enable endpoint 2 */
+    UsbDriver_ConfigureEndpoint(EP2, EP_DIR_IN, 2u);
+    UsbDriver_ConfigureEndpoint(EP2, EP_DIR_OUT, 2u);
+    UsbDriver_ConfigureEpOutBuf(EP2, EPx_dataPid[EP2], 64u);
 
-    UsbDriver_PrepareOutBufForReceiveDataFromHost(EP1, EP1_dataPid, 64u);
+    /* enable endpoint 3 */
+    UsbDriver_ConfigureEndpoint(EP3, EP_DIR_IN, 3u);
+
 
     //while(__DEBUG_HALT__);
     USBCTRL_REGS->SIE_CTRL.bit.PULLUP_EN      = 1u;
 
+}
+
+//-----------------------------------------------------------------------------------------
+/// \brief  
+///
+/// \param  
+///
+/// \return 
+//-----------------------------------------------------------------------------------------
+static boolean UsbDriver_ConfigureEndpoint(uint8 endpoint, uint8 direction, uint8 type)
+{
+  boolean status = FALSE;
+
+  if(endpoint > 0u && endpoint < 16u)
+  {
+    if(EP_DIR_IN == direction)
+    {
+      volatile EPx_CONTROL* epx_in_control  = (volatile EPx_CONTROL*)(USBCTRL_DPRAM_BASE + (EPx_IN_CONTROL_OFFSET * endpoint));
+      epx_in_control->reg                    = 0;
+      epx_in_control->bit.INTERRUPT_PER_BUFF = 1u;
+      epx_in_control->bit.INTERRUPT_ON_NAK   = 1u;
+      epx_in_control->bit.INTERRUPT_ON_STALL = 1u;
+      epx_in_control->bit.ENDPOINT_TYPE      = type & 0x03u;
+      epx_in_control->bit.BUFFER_ADDRESS     = (uint16)(0x100u + (endpoint * 0x80u));
+      epx_in_control->bit.ENABLE             = 1u;
+    }
+    else if(EP_DIR_OUT == direction)
+    {
+      volatile EPx_CONTROL* epx_out_control = (volatile EPx_CONTROL*)(USBCTRL_DPRAM_BASE + EPx_OUT_CONTROL_OFFSET + ((endpoint)* 8ul));
+      epx_out_control->reg                    = 0u;
+      epx_out_control->bit.INTERRUPT_PER_BUFF = 1u;
+      epx_out_control->bit.ENDPOINT_TYPE      = type & 0x03u;
+      epx_out_control->bit.BUFFER_ADDRESS     = (uint16)(0x100u + (endpoint * 0x80u));
+      epx_out_control->bit.ENABLE             = 1u;
+    }
+    else
+    {
+      /* wrong endpoint direction */
+      return(status);
+    }
+    status = TRUE;
+  }
+
+  return(status);
 }
 
 //-----------------------------------------------------------------------------------------
@@ -359,7 +502,7 @@ static boolean UsbDriver_SendStallToHost(uint8 endpoint, uint8 pid)
 ///
 /// \return 
 //-----------------------------------------------------------------------------------------
-static boolean UsbDriver_PrepareOutBufForReceiveDataFromHost(uint8 endpoint, uint8 pid, uint8 size)
+static boolean UsbDriver_ConfigureEpOutBuf(uint8 endpoint, uint8 pid, uint8 size)
 {
   boolean status = FALSE;
 
@@ -402,15 +545,42 @@ static void UsbDriver_HandleSetupPacket(const tUsbSetupPacket* const pUsbSetupPa
     if(bmRequestType->TransferDirection == USB_REQ_DIR_DEVICE_TO_HOST)
     {
       /* IN token is expected from the host, handle the specific request immediatly to the upper layer */
+      if(Request == 0x21u)
+      {
+        /* GET_LINE_CODING */
+        uint8 LineCodingFormat[7] = { 0x80,
+                                      0x25,
+                                      0,
+                                      0,
+                                      0,
+                                      0,
+                                      8
+                                    };
+        UsbDriver_SendDataToHost(EP0, DATA1_PID, (uint8*)LineCodingFormat, 7u);
+      }
     }
     else
     {
       /* OUT token is expected from the host, handle the specific request to upper layer after receiving the data on EP0 */
+      if(Request == 0x20u)
+      {
+        /* SET_LINE_CODING */
+        UsbDriver_SendDataToHost(EP0, DATA1_PID, NULL, 0);
+      }
+      else if(Request == 0x22u)
+      {
+        /* SET_CONTROL_LINE_STATE */
+        UsbDriver_SendDataToHost(EP0, DATA1_PID, NULL, 0);
+      }
+      else
+      {
+      }
     }
     _EP0_SpecificReq[_EP0_SpecificReq_index++] = *(volatile uint64*)pUsbSetupPacket;
   }
   else
   {
+    for(;;);
   }
 }
 
@@ -568,7 +738,7 @@ static void UsbDriver_Req_get_descriptor(const tUsbSetupPacket* const pUsbSetupP
           0x24,                                // bDescriptorType: CS_INTERFACE
           0x01,                                // bDescriptorSubType: Call Management
           0x00,                                // bmCapabilities: Device does not handle call management itself
-          0x01,                                // bDataInterface: Interface number of Data Class interface
+          0x02,                                // bDataInterface: Interface number of Data Class interface
       
           /* CDC Abstract Control Management Functional Descriptor */
           0x04,                                // bLength: CDC Abstract Control Management Descriptor size

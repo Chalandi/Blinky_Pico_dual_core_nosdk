@@ -49,6 +49,27 @@ typedef union {
   } bit;
 } EPx_BUFFER_CONTROL;
 
+typedef union {
+  __IOM uint32_t reg;                         /*!< (@ 0x00000008) EP1_IN_CONTROL                                             */
+  
+  struct {
+    __IOM uint32_t BUFFER_ADDRESS : 16;       /*!< [15..0] 64 byte aligned buffer address for this EP (bits 0-5
+                                                   are ignored). Relative to the start of the DPRAM.                         */
+    __IOM uint32_t INTERRUPT_ON_NAK : 1;      /*!< [16..16] Trigger an interrupt if a NAK is sent. Intended for
+                                                   debug only.                                                               */
+    __IOM uint32_t INTERRUPT_ON_STALL : 1;    /*!< [17..17] Trigger an interrupt if a STALL is sent. Intended for
+                                                   debug only.                                                               */
+          uint32_t            : 8;
+    __IOM uint32_t ENDPOINT_TYPE : 2;         /*!< [27..26] ENDPOINT_TYPE                                                    */
+    __IOM uint32_t INTERRUPT_PER_DOUBLE_BUFF : 1;/*!< [28..28] Trigger an interrupt each time both buffers are done.
+                                                   Only valid in double buffered mode.                                       */
+    __IOM uint32_t INTERRUPT_PER_BUFF : 1;    /*!< [29..29] Trigger an interrupt each time a buffer is done.                 */
+    __IOM uint32_t DOUBLE_BUFFERED : 1;       /*!< [30..30] This endpoint is double buffered.                                */
+    __IOM uint32_t ENABLE     : 1;            /*!< [31..31] Enable this endpoint. The device will not reply to
+                                                   any packets for this endpoint if this bit is not set.                     */
+  } bit;
+} EPx_CONTROL;
+
 #ifndef USBCTRL_DPRAM_BASE
 #define USBCTRL_DPRAM_BASE          0x50100000UL
 #endif
@@ -56,6 +77,9 @@ typedef union {
 #ifndef USBCTRL_REGS_BASE
 #define USBCTRL_REGS_BASE           0x50110000UL
 #endif
+
+#define EPx_IN_CONTROL_OFFSET   0x08
+#define EPx_OUT_CONTROL_OFFSET  0x04
 
 #define EPx_IN_BUFFER_CONTROL_OFFSET   0x80
 #define EPx_OUT_BUFFER_CONTROL_OFFSET  0x84

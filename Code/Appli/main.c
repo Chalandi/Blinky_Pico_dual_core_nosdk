@@ -141,6 +141,12 @@ void main_Core1(void)
   while(1)
   {
     LED_GREEN_TOGGLE();
+
+    if(UsbDriver_IsDeviceConnected())
+    {
+      UsbDriver_SendSerialMsg((uint8*)"Hello From Chalandi Amine\r\n");
+    }
+  
     BlockingDelay(10000000);
 
     /* communicate with the jtag tap */

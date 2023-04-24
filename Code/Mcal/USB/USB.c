@@ -27,6 +27,18 @@
 //=============================================================================
 // Globals (Debug purpose only)
 //=============================================================================
+#define ENABLE_DEBUG_USB  0
+#define ENABLE_DEBUG_HLT  0
+
+#if ENABLE_DEBUG_USB
+  #define __DEBUG_USB__
+#endif
+
+#if ENABLE_DEBUG_USB && ENABLE_DEBUG_HLT
+  #define __DEBUG_HALT__
+#endif
+
+#ifdef __DEBUG_USB__
 volatile uint64 _EP0_[100] = {0};
 volatile uint32 _EP0_index = 0;
 
@@ -49,8 +61,8 @@ volatile uint32 UsbReceived_EP3_OUT_count = 0;
 
 volatile uint32 UsbNotSupportedRequestCount = 0;
 
-volatile uint32 __DEBUG_HALT__ = 1;
-
+volatile uint32 boHaltBeforeEnableUsb = 1;
+#endif
 //=============================================================================
 // Local types
 //=============================================================================
@@ -120,8 +132,10 @@ void USBCTRL_IRQ(void)
     /* call the appropriate SETUP packet handler */
     UsbDriver_HandleSetupPacket(UsbSetupPacket);
 
+#ifdef __DEBUG_USB__
     //save the data
     _EP0_[_EP0_index++] = *(volatile uint64*)(USBCTRL_DPRAM_BASE);
+#endif
   }
   
   /* handle bus reset */
@@ -131,7 +145,9 @@ void USBCTRL_IRQ(void)
     USBCTRL_REGS->SIE_STATUS.bit.BUS_RESET = 1;
     USBCTRL_REGS->ADDR_ENDP.bit.ADDRESS = 0;
     UsbDeviceAddress = 0;
+#ifdef __DEBUG_USB__
     BusResetCounter++;
+#endif
   }
 
   /* handle OUT and IN packets */
@@ -142,8 +158,9 @@ void USBCTRL_IRQ(void)
     /***************************************************************************/
     if(USBCTRL_REGS->BUFF_STATUS.bit.EP0_OUT)
     {
+#ifdef __DEBUG_USB__
         UsbReceived_EP0_OUT_count++;
-
+#endif
        /* clear the EP0_OUT buffer status */
        USBCTRL_REGS->BUFF_STATUS.bit.EP0_OUT = 1;
 
@@ -156,8 +173,9 @@ void USBCTRL_IRQ(void)
         /* this bit indicate that the DATA is received by the HOST and we received ACK from HOST, the EP0_IN buffer is empty 
            (USBCTRL_DPRAM->EP0_IN_BUFFER_CONTROL.bit.FULL_0 is cleared to indicate that data has been sent).
         */
-
+#ifdef __DEBUG_USB__
         UsbReceived_EP0_IN_count++;
+#endif
        /* clear the EP0_IN buffer status */
        USBCTRL_REGS->BUFF_STATUS.bit.EP0_IN = 1;
 
@@ -176,8 +194,9 @@ void USBCTRL_IRQ(void)
     /***************************************************************************/
     if(USBCTRL_REGS->BUFF_STATUS.bit.EP1_OUT)
     {
+#ifdef __DEBUG_USB__
         UsbReceived_EP1_OUT_count++;
-
+#endif
        /* clear the EP1_OUT buffer status */
        USBCTRL_REGS->BUFF_STATUS.bit.EP1_OUT = 1;
 
@@ -188,8 +207,9 @@ void USBCTRL_IRQ(void)
     }
     if(USBCTRL_REGS->BUFF_STATUS.bit.EP1_IN)
     {
+#ifdef __DEBUG_USB__
         UsbReceived_EP1_IN_count++;
-
+#endif
        /* clear the EP1_IN buffer status */
        USBCTRL_REGS->BUFF_STATUS.bit.EP1_IN = 1;
 
@@ -204,8 +224,9 @@ void USBCTRL_IRQ(void)
     /***************************************************************************/
     if(USBCTRL_REGS->BUFF_STATUS.bit.EP2_OUT)
     {
+#ifdef __DEBUG_USB__
         UsbReceived_EP2_OUT_count++;
-
+#endif
        /* clear the EP2_OUT buffer status */
        USBCTRL_REGS->BUFF_STATUS.bit.EP2_OUT = 1;
 
@@ -216,8 +237,9 @@ void USBCTRL_IRQ(void)
     }
     if(USBCTRL_REGS->BUFF_STATUS.bit.EP2_IN)
     {
+#ifdef __DEBUG_USB__
         UsbReceived_EP2_IN_count++;
-
+#endif
        /* clear the EP2_IN buffer status */
        USBCTRL_REGS->BUFF_STATUS.bit.EP2_IN = 1;
 
@@ -232,8 +254,9 @@ void USBCTRL_IRQ(void)
     /***************************************************************************/
     if(USBCTRL_REGS->BUFF_STATUS.bit.EP3_OUT)
     {
+#ifdef __DEBUG_USB__
         UsbReceived_EP3_OUT_count++;
-
+#endif
        /* clear the EP3_OUT buffer status */
        USBCTRL_REGS->BUFF_STATUS.bit.EP3_OUT = 1;
 
@@ -244,8 +267,9 @@ void USBCTRL_IRQ(void)
     }
     if(USBCTRL_REGS->BUFF_STATUS.bit.EP3_IN)
     {
+#ifdef __DEBUG_USB__
         UsbReceived_EP3_IN_count++;
-
+#endif
        /* clear the EP3_IN buffer status */
        USBCTRL_REGS->BUFF_STATUS.bit.EP3_IN = 1;
 
@@ -272,7 +296,7 @@ void USBCTRL_IRQ(void)
        uint8* const pBuffer_EP1 = (uint8*)((uint32)(USBCTRL_DPRAM_BASE + 0x100u + (EP1 * 0x80u)));
        UsbDriver_SendDataToHost(EP1, EPx_dataPid[EP1], pBuffer_EP1, 4u);
     }
-    
+
     if(USBCTRL_REGS->EP_STATUS_STALL_NAK.bit.EP2_IN)
     {
       /* NAK token was sent by the device controller as response for IN token from host.
@@ -280,10 +304,6 @@ void USBCTRL_IRQ(void)
       */
        /* clear the EP2_IN NAK interrupt flag */
        USBCTRL_REGS->EP_STATUS_STALL_NAK.bit.EP2_IN = 1u;
-
-       /* send empty data from the host (echo test) */
-       static const uint8* const msg = "My CDC driver is working :) \r\n";
-       UsbDriver_SendDataToHost(EP2, EPx_dataPid[EP2], (uint8*)msg, (uint8)strlen(msg));
     }
 
     if(USBCTRL_REGS->EP_STATUS_STALL_NAK.bit.EP3_IN)
@@ -378,8 +398,11 @@ void UsbInit(void)
     /* enable endpoint 3 */
     UsbDriver_ConfigureEndpoint(EP3, EP_DIR_IN, 3u);
 
+#ifdef __DEBUG_HALT__
+    while(boHaltBeforeEnableUsb);
+#endif
 
-    //while(__DEBUG_HALT__);
+    /* enable the USB controller */
     USBCTRL_REGS->SIE_CTRL.bit.PULLUP_EN      = 1u;
 
 }
@@ -576,7 +599,9 @@ static void UsbDriver_HandleSetupPacket(const tUsbSetupPacket* const pUsbSetupPa
       {
       }
     }
+#ifdef __DEBUG_USB__
     _EP0_SpecificReq[_EP0_SpecificReq_index++] = *(volatile uint64*)pUsbSetupPacket;
+#endif
   }
   else
   {
@@ -969,4 +994,26 @@ static void UsbDriver_Req_synch_frame(const tUsbSetupPacket* const pUsbSetupPack
   (void)pUsbSetupPacket;
 }
 
+//-----------------------------------------------------------------------------------------
+/// \brief  
+///
+/// \param  
+///
+/// \return 
+//-----------------------------------------------------------------------------------------
+void UsbDriver_SendSerialMsg(uint8* msg)
+{
+  UsbDriver_SendDataToHost(EP2, EPx_dataPid[EP2], (uint8*)msg, (uint8)strlen((const char*)msg));
+}
 
+//-----------------------------------------------------------------------------------------
+/// \brief  
+///
+/// \param  
+///
+/// \return 
+//-----------------------------------------------------------------------------------------
+boolean UsbDriver_IsDeviceConnected(void)
+{
+  return(USBCTRL_REGS->SIE_STATUS.bit.CONNECTED == 1u ? TRUE : FALSE);
+}

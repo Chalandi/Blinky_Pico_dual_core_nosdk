@@ -23,6 +23,8 @@
 
 void USBCTRL_IRQ(void);
 void UsbInit(void);
+void UsbDriver_SendSerialMsg(uint8* msg);
+boolean UsbDriver_IsDeviceConnected(void);
 
 /* endpoints IDs */
 #define EP0      0u

@@ -220,9 +220,19 @@ ifeq ($(MAKECMDGOALS),build)
 -include $(subst .o,.d,$(FILES_O))
 endif
 
-build : PIO_SRC_GEN $(OUTPUT_DIR)/$(PRJ_NAME).elf
+build : PRE_BUILD_INFO  PIO_SRC_GEN  $(OUTPUT_DIR)/$(PRJ_NAME).elf  POST_BUILD_INFO
 
-all : PIO_SRC_GEN $(OUTPUT_DIR)/$(PRJ_NAME).elf
+all : PRE_BUILD_INFO  PIO_SRC_GEN  $(OUTPUT_DIR)/$(PRJ_NAME).elf  POST_BUILD_INFO
+
+.PHONY : PRE_BUILD_INFO
+PRE_BUILD_INFO:
+	@-echo +++ Start
+	@git log -n 1 --decorate-refs=refs/heads/ --pretty=format:"+++ Git branch:  %D (%h)"
+	@git log -n 1 --clear-decorations 2>&1 > /dev/null
+
+.PHONY : POST_BUILD_INFO
+POST_BUILD_INFO:
+	@-echo +++ End
 
 .PHONY : PIO_SRC_GEN
 PIO_SRC_GEN: $(PIO_OUTPUT_FILES)
@@ -257,9 +267,10 @@ $(OBJ_DIR)/%.o : %.cpp
 	@-$(PYTHON) $(ERR_MSG_FORMATER_SCRIPT) $(OBJ_DIR)/$(basename $(@F)).err -COLOR
 
 $(OUTPUT_DIR)/$(PRJ_NAME).elf : $(FILES_O) $(LD_SCRIPT)
-	@-echo +++ link : $(subst \,/,$@)
+	@-echo +++ link: $(subst \,/,$@)
 	@$(LD) $(LOPS) $(FILES_O) -o $(OUTPUT_DIR)/$(PRJ_NAME).elf
-	@-echo +++ generate : $(OUTPUT_DIR)/$(PRJ_NAME).readelf
+	@-echo +++ generate: $(OUTPUT_DIR)/$(PRJ_NAME).readelf
 	@$(READELF) --wide -a $(OUTPUT_DIR)/$(PRJ_NAME).elf > $(OUTPUT_DIR)/$(PRJ_NAME).readelf
 	@$(ELF2UF2) $(OUTPUT_DIR)/$(PRJ_NAME).elf $(OUTPUT_DIR)/$(PRJ_NAME).uf2
+
 

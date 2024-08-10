@@ -11,7 +11,7 @@ dual-core ARM(R) Cortex(R)-M0+ and uses no sdk.
 Features include:
   - CPU, dual-core, clock and PLL initialization,
   - timebase derived from SysTick,
-  - blinky LED show on port 25 (green LED),
+  - blinky LED show on the green user LED on `port25`,
   - implementation in C99 with absolute minimal use of assembly.
 
 A clear and easy-to-understand build system based on GNUmake
@@ -25,7 +25,7 @@ controller using no sdk.
 
 The application boots from the secondary boot-loader (SBL)
 at the start location. This low-level startup boots through
-core 0. Core 0 then starts up core 1 (via a specifiec protocol).
+core 0. Core 0 then starts up core 1 (via a specific protocol).
 Core 1 subsequently carries out the blinky application,
 while core 0 enters an endless, idle loop.
 

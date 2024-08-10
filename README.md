@@ -53,3 +53,9 @@ be installed with
 ```sh
 sudo apt install gcc-arm-none-eabi
 ```
+
+## Continuous Integration
+
+CI runs on pushes and pull-requests with a simple
+build and result verification on `ubuntu-latest`
+using GutHub Actions.

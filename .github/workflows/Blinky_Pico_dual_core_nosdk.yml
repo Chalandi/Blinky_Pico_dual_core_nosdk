@@ -28,4 +28,4 @@ jobs:
           echo
           bash ./Rebuild.sh
           echo
-          ls -la ./Output/Blinky_Pico_dual_core_nosdk.hex
+          ls -la ./Output

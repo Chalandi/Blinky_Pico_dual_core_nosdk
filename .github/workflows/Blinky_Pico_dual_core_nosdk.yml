@@ -28,4 +28,5 @@ jobs:
           echo
           bash ./Rebuild.sh
           echo
-          ls -la ./Output
+          ls -la ./Output/Blinky_Pico_dual_core_nosdk.elf
+          ls -la ./Output/Blinky_Pico_dual_core_nosdk.uf2

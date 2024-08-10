@@ -150,4 +150,3 @@ boolean RP2040_StartCore1(void)
 
   return(TRUE);
 }
-

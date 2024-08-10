@@ -22,6 +22,10 @@ jobs:
           arm-none-eabi-g++ -v
           echo
           echo "rebuild blinky"
+          echo
+          echo 'cp Tools/linux/elf2uf2 Tools'
+          cp Tools/linux/elf2uf2 Tools
+          echo
           bash ./Rebuild.sh
           echo
           ls -la ./Output/Blinky_Pico_dual_core_nosdk.hex

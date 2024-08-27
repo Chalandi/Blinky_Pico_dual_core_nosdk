@@ -1,6 +1,8 @@
 Blinky_Pico_dual_core_nosdk
 ==================
 
+[![Build Status](https://github.com/chalandi/Blinky_Pico_dual_core_nosdk/actions/workflows/Blinky_Pico_dual_core_nosdk.yml/badge.svg)](https://github.com/chalandi/Blinky_Pico_dual_core_nosdk/actions)
+
 This repository implements an entirely manually-written,
 Blinky Project for the RaspberryPi(R) Pico RP2040 dual-core
 ARM(R) Cortex(R)-M0+ (RPI PICO RP2040).
@@ -53,3 +55,9 @@ be installed with
 ```sh
 sudo apt install gcc-arm-none-eabi
 ```
+
+## Continuous Integration
+
+CI runs on pushes and pull-requests with a simple
+build and result verification on `ubuntu-latest`
+using GutHub Actions.

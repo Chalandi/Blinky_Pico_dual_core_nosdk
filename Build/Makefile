@@ -148,6 +148,7 @@ ifeq ($(LD), arm-none-eabi-ld)
          -ffast-math                            \
          -e Startup_Init                        \
          --print-memory-usage                   \
+         --no-warn-rwx-segments                 \
          --print-map                            \
          -dT $(LD_SCRIPT)                       \
          -Map=$(OUTPUT_DIR)/$(PRJ_NAME).map     \
@@ -161,6 +162,7 @@ else
          -mabi=aapcs                            \
          -ffast-math                            \
          -Wl,--print-memory-usage               \
+         -Wl,--no-warn-rwx-segments             \
          -Wl,--print-map                        \
          -Wl,-dT $(LD_SCRIPT)                   \
          -Wl,-Map=$(OUTPUT_DIR)/$(PRJ_NAME).map \
